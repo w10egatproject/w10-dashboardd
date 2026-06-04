@@ -7,23 +7,19 @@ import {
   Edit, 
   Trash2, 
   LogOut, 
-  LayoutDashboard,
   FileText,
-  Bell,
   Calendar,
   Clock,
-  BarChart3,
-  PieChart as PieChartIcon,
   Table as TableIcon,
   TrendingUp,
   Activity,
-  ArrowDownCircle,
-  ArrowUpCircle,
   Settings as SettingsIcon,
   Sun,
   Moon,
-  User as UserIcon,
-  Shield
+  Shield,
+  ChevronLeft,
+  ChevronRight,
+  PieChart as PieChartIcon
 } from 'lucide-react';
 import {
   BarChart,
@@ -57,17 +53,31 @@ interface Project {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
-  const [view, setView] = useState<'dashboard' | 'reports' | 'status' | 'settings'>('dashboard');
+  const [view, setView] = useState<'overview' | 'dashboard' | 'reports' | 'status' | 'loadFactor' | 'settings'>('overview');
   const [projects, setProjects] = useState<Project[]>([]);
   const [weeklyData, setWeeklyData] = useState<{[key: string]: Project[]}>({});
-  const [loading, setLoading] = useState<boolean>(true);
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
   const [selectedMonth, setSelectedMonth] = useState<string>("all");
-  const [selectedYear, setSelectedYear] = useState<string>("2023");
+  const [selectedYear, setSelectedYear] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState('');
   
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+  
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    return localStorage.getItem('theme') === 'dark';
+  });
   const [displayName, setDisplayName] = useState(user);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success'>('idle');
+
+  const handleSaveSettings = async () => {
+    setSaveStatus('saving');
+    setTimeout(() => {
+      setSaveStatus('success');
+      setTimeout(() => setSaveStatus('idle'), 3000);
+    }, 1000);
+  };
 
   const months = [
     "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
@@ -84,13 +94,23 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   }, []);
 
   useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [isDarkMode]);
+
+  useEffect(() => {
     const fetchData = async () => {
       const apiKey = import.meta.env.VITE_GOOGLE_SHEETS_API_KEY;
       const sheetId = import.meta.env.VITE_GOOGLE_SHEETS_ID;
       
-      const fetchSheet = async (sheetName: string, range: string, mapper: (row: any, idx: number) => Project) => {
+      const fetchSheet = async (sheetName: string, range: string, mapper: (row: any, idx: number) => any) => {
         try {
-          const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetName}!${range}?key=${apiKey}`);
+          const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(sheetName)}!${range}?key=${apiKey}`);
           const data = await response.json();
           return data.values ? data.values.map(mapper) : [];
         } catch (e) {
@@ -99,15 +119,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
         }
       };
 
-      setLoading(true);
-      
-      const mainData = await fetchSheet('data', 'A2:J500', (row, idx) => ({
+      const mainData = await fetchSheet('data', 'A2:L1000', (row, idx) => ({
         id: row[0] || `d-${idx}`,
         ecm: row[2] || '-',
         name: row[4] || '-',
         date: row[6] || '-',
         department: row[8] || '-',
-        status: 'รอดำเนินการ',
+        status: row[11] || 'รอดำเนินการ',
         sheetSource: 'data',
         equipGroup: row[8] || 'General' 
       }));
@@ -130,9 +148,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
 
       setProjects(mainData);
       setWeeklyData({ W11: w11, W12: w12, W13: w13, W14: w14 });
-      setLoading(false);
-    };
-    
+      };
+
     fetchData();
   }, []);
 
@@ -144,7 +161,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
       const itemMonth = (parseInt(dateParts[1]) - 1).toString();
       const itemYear = dateParts[2].trim();
       const monthMatch = selectedMonth === "all" || itemMonth === selectedMonth;
-      const yearMatch = itemYear === selectedYear;
+      const yearMatch = selectedYear === "all" || itemYear === selectedYear;
       
       const searchMatch = searchTerm === '' || 
         p.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -156,25 +173,16 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
     });
   }, [projects, selectedMonth, selectedYear, searchTerm]);
 
-  const workflowStats = useMemo(() => {
-    const calculateInOut = (list: Project[]) => {
-      const outCount = list.filter(p => 
-        p.status.includes('เสร็จ') || 
-        p.status.includes('สำเร็จ') ||
-        p.status.includes('ปิดงาน')
-      ).length;
-      const inCount = list.length - outCount;
-      return { in: inCount, out: outCount, total: list.length };
-    };
-    const allProjects = [...projects, ...Object.values(weeklyData).flat()];
-    return {
-      W11: calculateInOut(weeklyData.W11 || []),
-      W12: calculateInOut(weeklyData.W12 || []),
-      W13: calculateInOut(weeklyData.W13 || []),
-      W14: calculateInOut(weeklyData.W14 || []),
-      Total: calculateInOut(allProjects)
-    };
-  }, [weeklyData, projects]);
+  // Pagination Logic
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedMonth, selectedYear]);
+
+  const totalPages = Math.ceil(filteredProjects.length / ITEMS_PER_PAGE);
+  const paginatedProjects = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredProjects.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredProjects, currentPage]);
 
   const deptWeeklySummary = useMemo(() => {
     const groups = ["BEML", "Conveyor", "สูบน้ำ", "Moblie other", "power plant", "General"];
@@ -200,25 +208,19 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   }, [weeklyData]);
 
   const weeklyStats = useMemo(() => {
-    return Object.keys(weeklyData).map(key => ({
-      name: key,
-      count: weeklyData[key].length,
-      completed: weeklyData[key].filter(p => p.status === 'เสร็จ' || p.status === 'เสร็จสิ้น').length,
-      pending: weeklyData[key].filter(p => p.status !== 'เสร็จ' && p.status !== 'เสร็จสิ้น').length,
-    }));
-  }, [weeklyData]);
-
-  const deptChartData = useMemo(() => {
-    const deptMap: { [key: string]: number } = {};
-    filteredProjects.forEach(p => {
-      const dept = p.department || 'ไม่ระบุ';
-      deptMap[dept] = (deptMap[dept] || 0) + 1;
+    return Object.keys(weeklyData).map(key => {
+      const data = weeklyData[key];
+      return {
+        name: key,
+        total: data.length,
+        in: data.filter(p => p.status.includes('งานเข้า') || p.status.includes('เข้า')).length,
+        pending: data.filter(p => p.status.includes('รอ') || p.status.includes('ดำเนินการ') || p.status.includes('ยังไม่เสร็จ')).length,
+        completed: data.filter(p => p.status.includes('เสร็จ') || p.status.includes('สำเร็จ')).length,
+        out: data.filter(p => p.status.includes('ออก')).length,
+        other: data.filter(p => !p.status.includes('เข้า') && !p.status.includes('เสร็จ') && !p.status.includes('สำเร็จ') && !p.status.includes('ออก') && !p.status.includes('รอ') && !p.status.includes('ดำเนินการ')).length,
+      };
     });
-    return Object.keys(deptMap).map(name => ({
-      name,
-      value: deptMap[name]
-    })).sort((a, b) => b.value - a.value).slice(0, 8);
-  }, [filteredProjects]);
+  }, [weeklyData]);
 
   const statusStats = useMemo(() => {
     const total = projects.length;
@@ -232,8 +234,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
       pendingPercent: ((pending / total) * 100).toFixed(1)
     };
   }, [projects]);
-
-  const COLORS = ['#1e3a8a', '#fbbf24', '#3b82f6', '#f59e0b', '#10b981', '#ef4444', '#6366f1', '#ec4899'];
 
   const renderStatus = (status: string) => {
     let type = 'pending';
@@ -258,11 +258,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
             <a className={`nav-link ${view === 'dashboard' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setView('dashboard'); }}>หน้าแรก</a>
             <a className={`nav-link ${view === 'reports' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setView('reports'); }}>รายงาน</a>
             <a className={`nav-link ${view === 'status' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setView('status'); }}>สถานะการดำเนินงาน</a>
+            <a className={`nav-link ${view === 'overview' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setView('overview'); }}>ภาพรวม</a>
+            <a className={`nav-link ${view === 'loadFactor' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setView('loadFactor'); }}>Load Factor / Man</a>
             <a className={`nav-link ${view === 'settings' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setView('settings'); }}>ตั้งค่า</a>
           </div>
         </div>
         <div className="nav-right">
-          <button className="dev-credit-btn"><span className="dev-dot"></span>dev.warit</button>
+          <button className="dev-credit-btn"><span className="dev-dot"></span>{displayName}</button>
           <button onClick={onLogout} className="logout-btn"><LogOut size={16} style={{ marginRight: '8px', verticalAlign: 'middle' }} />ออกจากระบบ</button>
         </div>
       </nav>
@@ -271,9 +273,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
         <header className="content-header">
           <div className="header-left">
             <h2>
-              {view === 'dashboard' ? 'แผงควบคุมหลัก' : 
+              {view === 'overview' ? 'ภาพรวมระบบ (System Overview)' : 
+               view === 'dashboard' ? 'แผงควบคุมหลัก' : 
                view === 'reports' ? 'รายงานวิเคราะห์รายสัปดาห์ (W11-W14)' : 
-               view === 'status' ? 'สถานะการดำเนินงานภาพรวม' : 'ตั้งค่าระบบ'}
+               view === 'status' ? 'สถานะการดำเนินงานภาพรวม' : 
+               view === 'loadFactor' ? 'Load Factor / Man Power' : 'ตั้งค่าระบบ'}
             </h2>
             <p className="header-subtitle">ข้อมูลสรุปจาก Google Sheet</p>
           </div>
@@ -288,6 +292,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                 </select>
                 <div className="filter-divider"></div>
                 <select className="filter-select" value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)}>
+                  <option value="all">ทุกปี</option>
                   {years.map(y => <option key={y} value={y}>{parseInt(y) + 543}</option>)}
                 </select>
               </div>
@@ -303,24 +308,218 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
           </div>
         </header>
 
-        {view === 'dashboard' ? (
+        {view === 'overview' ? (
+          <div className="overview-section">
+            <div className="stats-grid">
+              <div className="stats-card blue">
+                <div className="stats-icon blue"><Activity size={24} /></div>
+                <div className="stats-info">
+                  <h3>โครงการทั้งหมด</h3>
+                  <div className="value">{projects.length}</div>
+                  <p>รายการในฐานข้อมูล</p>
+                </div>
+              </div>
+              <div className="stats-card success">
+                <div className="stats-icon success"><CheckCircle size={24} /></div>
+                <div className="stats-info">
+                  <h3>ดำเนินการเสร็จสิ้น</h3>
+                  <div className="value" style={{color: '#10b981'}}>{statusStats.finish}</div>
+                  <p>{statusStats.finishPercent}% ของทั้งหมด</p>
+                </div>
+              </div>
+              <div className="stats-card yellow">
+                <div className="stats-icon yellow"><Clock size={24} /></div>
+                <div className="stats-info">
+                  <h3>รอดำเนินการ / SAP</h3>
+                  <div className="value" style={{color: '#f59e0b'}}>{statusStats.pending}</div>
+                  <p>{statusStats.pendingPercent}% ของทั้งหมด</p>
+                </div>
+              </div>
+              <div className="stats-card blue">
+                <div className="stats-icon blue"><TrendingUp size={24} /></div>
+                <div className="stats-info">
+                  <h3>ประสิทธิภาพเฉลี่ย</h3>
+                  <div className="value">85.4%</div>
+                  <p>ค่าเฉลี่ยรายเดือน</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="charts-grid" style={{ marginTop: '20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '20px' }}>
+              <div className="chart-card">
+                <div className="chart-header">
+                  <TrendingUp size={20} />
+                  <h3>แนวโน้มงานรายสัปดาห์ (W11 - W14)</h3>
+                </div>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={weeklyStats}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="name" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar name="งานเข้า" dataKey="in" fill="#1e3a8a" radius={[4, 4, 0, 0]} />
+                    <Bar name="งานออก" dataKey="out" fill="#10b981" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div className="chart-card">
+                <div className="chart-header">
+                  <PieChartIcon size={20} />
+                  <h3>สัดส่วนสถานะงานปัจจุบัน</h3>
+                </div>
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={[
+                        { name: 'เสร็จสิ้น', value: statusStats.finish },
+                        { name: 'รอดำเนินการ', value: statusStats.pending }
+                      ]}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={100}
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      <Cell fill="#10b981" />
+                      <Cell fill="#f59e0b" />
+                    </Pie>
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="chart-card full-width" style={{ marginTop: '20px' }}>
+              <div className="chart-header">
+                <TableIcon size={20} />
+                <h3>ตารางสรุปกลุ่มงานหลัก</h3>
+              </div>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>กลุ่มงาน</th>
+                    <th>จำนวนงาน (W11-W14)</th>
+                    <th>สถานะเฉลี่ย</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(deptWeeklySummary).slice(0, 4).map(([group, counts]) => (
+                    <tr key={group}>
+                      <td><strong>{group}</strong></td>
+                      <td>{counts.Total} รายการ</td>
+                      <td>{renderStatus(counts.Total > 5 ? 'ดำเนินการแล้ว' : 'รอดำเนินการ')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : view === 'dashboard' ? (
           <>
             <div className="stats-grid">
-              <div className="stats-card blue"><div className="stats-icon blue"><Users size={24} /></div><div className="stats-info"><h3>รายการที่พบ</h3><div className="value">{filteredProjects.length} รายการ</div></div></div>
-              <div className="stats-card yellow"><div className="stats-icon yellow"><BookOpen size={24} /></div><div className="stats-info"><h3>แผนกที่เกี่ยวข้อง</h3><div className="value">{new Set(filteredProjects.map(p => p.department)).size} แผนก</div></div></div>
-              <div className="stats-card blue"><div className="stats-icon blue"><CheckCircle size={24} /></div><div className="stats-info"><h3>ECM ที่เปิดแล้ว</h3><div className="value">{filteredProjects.filter(p => p.ecm !== '-').length} รายการ</div></div></div>
-              <div className="stats-card yellow"><div className="stats-icon yellow"><FileText size={24} /></div><div className="stats-info"><h3>ข้อมูลทั้งหมดในระบบ</h3><div className="value">{projects.length}</div></div></div>
+              {weeklyStats.map((stat, i) => (
+                <div key={i} className={`stats-card ${i % 2 === 0 ? 'blue' : 'yellow'}`} style={{ flexDirection: 'column', alignItems: 'flex-start', padding: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                    <div className="stats-icon circular">
+                      <img src="/LogoEGATE.jpg" alt="EGAT" className="stat-user-img" />
+                    </div>
+                    <div className="stats-info">
+                      <h3 style={{ fontSize: '18px', fontWeight: 800, margin: 0 }}>{stat.name} เข้า {stat.total}</h3>
+                    </div>
+                  </div>
+                  
+                  <div className="weekly-breakdown-list">
+                    <div className="breakdown-item">
+                      <span className="breakdown-label">ยังไม่เสร็จ</span>
+                      <span className="breakdown-value" style={{fontSize: '16px'}}>{stat.pending}</span>
+                    </div>
+                    <div className="breakdown-item">
+                      <span className="breakdown-label">เสร็จ</span>
+                      <span className="breakdown-value highlight" style={{fontSize: '16px'}}>{stat.completed}</span>
+                    </div>
+                    <div className="breakdown-item" style={{borderBottom: '1px solid #e2e8f0', paddingBottom: '8px'}}>
+                      <span className="breakdown-label">อื่น</span>
+                      <span className="breakdown-value" style={{fontSize: '16px'}}>{stat.other}</span>
+                    </div>
+                    <div className="breakdown-item" style={{ marginTop: '8px', paddingTop: '4px' }}>
+                      <span className="breakdown-label" style={{ fontWeight: 800, fontSize: '16px' }}>งานออก</span>
+                      <span className="breakdown-value" style={{ fontSize: '16px', color: 'var(--egat-blue)' }}>{stat.out}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
+
+            <div className="stats-grid" style={{ marginTop: '20px' }}>
+              <div 
+                className="stats-card blue clickable" 
+                onClick={() => { setSearchTerm(''); setSelectedMonth('all'); setSelectedYear('all'); }}
+                title="คลิกเพื่อล้างตัวกรองทั้งหมด"
+              >
+                <div className="stats-icon blue"><Users size={24} /></div>
+                <div className="stats-info">
+                  <h3>รายการที่พบ</h3>
+                  <div className="value">{filteredProjects.length} รายการ</div>
+                </div>
+              </div>
+
+              <div className="stats-card yellow">
+                <div className="stats-icon yellow"><BookOpen size={24} /></div>
+                <div className="stats-info">
+                  <h3>แผนกที่เกี่ยวข้อง</h3>
+                  <div className="value">{new Set(filteredProjects.map(p => p.department)).size} แผนก</div>
+                </div>
+              </div>
+
+              <div 
+                className="stats-card blue clickable"
+                onClick={() => setSearchTerm('')}
+                title="ล้างคำค้นหา"
+              >
+                <div className="stats-icon blue"><CheckCircle size={24} /></div>
+                <div className="stats-info">
+                  <h3>ECM ที่เปิดแล้ว</h3>
+                  <div className="value">{filteredProjects.filter(p => p.ecm !== '-').length} รายการ</div>
+                </div>
+              </div>
+
+              <div 
+                className="stats-card yellow clickable"
+                onClick={() => { setSearchTerm(''); setSelectedMonth('all'); setSelectedYear('all'); }}
+                title="ดูข้อมูลทั้งหมด"
+              >
+                <div className="stats-icon yellow"><FileText size={24} /></div>
+                <div className="stats-info">
+                  <h3>ข้อมูลทั้งหมดในระบบ</h3>
+                  <div className="value">{projects.length}</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="stats-grid" style={{ marginTop: '20px', marginBottom: '20px' }}>
+              <div className="stats-card full-width">
+                <div className="stats-icon"><Activity size={28} /></div>
+                <div className="stats-info">
+                  <h3>รวม w/o ทั้งหมด</h3>
+                  <div className="value">{projects.length} รายการ</div>
+                </div>
+              </div>
+            </div>
+
             <div className="table-section">
               <div className="table-header">
-                <h3>รายการข้อมูล {selectedMonth === "all" ? "ทุกเดือน" : `ประจำเดือน ${months[parseInt(selectedMonth)]}`} {parseInt(selectedYear) + 543}</h3>
+                <h3>รายการข้อมูล {selectedMonth === "all" ? "ทุกเดือน" : `ประจำเดือน ${months[parseInt(selectedMonth)]}`} {selectedYear === "all" ? "ทุกปี" : parseInt(selectedYear) + 543}</h3>
                 <div className="search-bar"><Search className="search-icon" size={18} /><input type="text" placeholder="ค้นหาข้อมูล..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
               </div>
               <table className="data-table">
                 <thead><tr><th>ID</th><th>ECM</th><th>รายละเอียด</th><th>วันที่</th><th>แผนก</th><th>สถานะ</th><th>จัดการ</th></tr></thead>
                 <tbody>
-                  {filteredProjects.length > 0 ? (
-                    filteredProjects.map((p, idx) => (
+                  {paginatedProjects.length > 0 ? (
+                    paginatedProjects.map((p, idx) => (
                       <tr key={idx}><td>{p.id}</td><td style={{ fontWeight: 500, color: '#1e3a8a' }}>{p.ecm}</td><td>{p.name}</td><td>{p.date}</td><td>{p.department}</td><td>{renderStatus(p.status)}</td><td><div className="action-btns"><button className="action-btn edit-btn"><Edit size={18} /></button><button className="action-btn delete-btn"><Trash2 size={18} /></button></div></td></tr>
                     ))
                   ) : (
@@ -328,6 +527,28 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                   )}
                 </tbody>
               </table>
+
+              {totalPages > 1 && (
+                <div className="pagination-container">
+                  <button 
+                    className="page-btn" 
+                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft size={18} /> ก่อนหน้า
+                  </button>
+                  <div className="page-info">
+                    หน้า {currentPage} จาก {totalPages}
+                  </div>
+                  <button 
+                    className="page-btn" 
+                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                  >
+                    ถัดไป <ChevronRight size={18} />
+                  </button>
+                </div>
+              )}
             </div>
           </>
         ) : view === 'reports' ? (
@@ -393,28 +614,120 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
               </ResponsiveContainer>
             </div>
           </div>
+        ) : view === 'loadFactor' ? (
+          <div className="load-factor-section">
+            <div className="stats-grid">
+              <div className="stats-card blue">
+                <div className="stats-icon blue"><Users size={24} /></div>
+                <div className="stats-info">
+                  <h3>Total Man Power</h3>
+                  <div className="value">-- คน</div>
+                </div>
+              </div>
+              <div className="stats-card yellow">
+                <div className="stats-icon yellow"><TrendingUp size={24} /></div>
+                <div className="stats-info">
+                  <h3>Avg Load Factor</h3>
+                  <div className="value">-- %</div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="chart-card" style={{marginTop: '20px'}}>
+              <div className="chart-header"><Activity size={20} /><h3>ประสิทธิภาพการทำงาน (Load Factor)</h3></div>
+              <div style={{ padding: '40px', textAlign: 'center', color: 'var(--egat-gray)' }}>
+                <p>กำลังพัฒนาส่วนแสดงผลข้อมูลจากชีต Dashboard L/F</p>
+                <small>รอดำเนินการเชื่อมต่อข้อมูล Man Power และ Load Factor</small>
+              </div>
+            </div>
+          </div>
         ) : (
           <div className="settings-section">
             <div className="settings-card">
-              <h3><SettingsIcon size={20} /> ตั้งค่าส่วนตัว</h3>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+                <h3 style={{ margin: 0 }}><SettingsIcon size={20} /> ตั้งค่าระบบ</h3>
+                {saveStatus === 'success' && <span style={{ color: '#10b981', fontSize: '12px', fontWeight: 800 }}>บันทึกสำเร็จ!</span>}
+              </div>
+
               <div className="settings-item">
-                <label>โหมดกลางคืน (Dark Mode)</label>
-                <button onClick={() => setIsDarkMode(!isDarkMode)} className="toggle-btn">
-                  {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+                <div className="settings-info-text">
+                  <label>โหมดกลางคืน (Dark Mode)</label>
+                  <p style={{ margin: 0, fontSize: '11px', color: 'var(--egat-gray)' }}>ปรับเปลี่ยนโทนสีของหน้าจอตามความต้องการ</p>
+                </div>
+                <button onClick={() => setIsDarkMode(!isDarkMode)} className={`toggle-btn ${isDarkMode ? 'active' : ''}`}>
+                  {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
                   <span>{isDarkMode ? 'เปิดโหมดปกติ' : 'เปิดโหมดกลางคืน'}</span>
                 </button>
               </div>
+
               <div className="settings-item">
-                <label>ชื่อที่แสดง (Display Name)</label>
-                <input type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="settings-input" />
+                <div className="settings-info-text">
+                  <label>ชื่อที่แสดง (Display Name)</label>
+                  <p style={{ margin: 0, fontSize: '11px', color: 'var(--egat-gray)' }}>ชื่อที่จะปรากฏบนหน้า Dashboard และรายงาน</p>
+                </div>
+                <input 
+                  type="text" 
+                  value={displayName} 
+                  onChange={(e) => setDisplayName(e.target.value)} 
+                  className="settings-input"
+                  placeholder="ใส่ชื่อของคุณ..."
+                />
               </div>
+
               <div className="settings-item">
-                <label>ความปลอดภัย</label>
-                <button className="security-btn"><Shield size={20} /> เปลี่ยนรหัสผ่าน</button>
+                <div className="settings-info-text">
+                  <label>ความปลอดภัย</label>
+                  <p style={{ margin: 0, fontSize: '11px', color: 'var(--egat-gray)' }}>จัดการรหัสผ่านและสิทธิ์การเข้าถึง</p>
+                </div>
+                <button className="security-btn"><Shield size={18} /> เปลี่ยนรหัสผ่าน</button>
+              </div>
+
+              <div style={{ marginTop: '32px' }}>
+                <button 
+                  className="save-settings-btn" 
+                  onClick={handleSaveSettings}
+                  disabled={saveStatus !== 'idle'}
+                >
+                  {saveStatus === 'saving' ? 'กำลังบันทึก...' : 'บันทึกการตั้งค่า'}
+                </button>
+              </div>
+            </div>
+
+            <div className="settings-card" style={{ marginTop: '20px', backgroundColor: '#eff6ff' }}>
+              <h3 style={{ fontSize: '16px', color: '#1e3a8a' }}><Users size={18} /> ข้อมูลการติดต่อ</h3>
+              <div style={{ fontSize: '14px', lineHeight: '1.8', color: '#1e3a8a' }}>
+                <p><strong>ที่อยู่:</strong> 801 หมู่ 6 ต.แม่เมาะ อ.แม่เมาะ จ.ลำปาง 52220</p>
+                <p><strong>ติดต่อสอบถามข้อมูล:</strong> ประชาสัมพันธ์เหมืองแม่เมาะ โทร. 0-5425-4051-4</p>
+              </div>
+            </div>
+
+            <div className="settings-card" style={{ marginTop: '20px', backgroundColor: '#f8fafc' }}>
+              <h3 style={{ fontSize: '14px' }}><Activity size={18} /> ข้อมูลโปรเจกต์</h3>
+              <div style={{ fontSize: '13px', lineHeight: '1.6', color: '#64748b' }}>
+                <p><strong>เวอร์ชัน:</strong> 1.2.0 (Stable)</p>
+                <p><strong>ผู้พัฒนา:</strong> dev.warit</p>
+                <p><strong>แหล่งข้อมูล:</strong> Google Sheets API v4</p>
+                <p><strong>สถานะระบบ:</strong> เชื่อมต่อปกติ</p>
               </div>
             </div>
           </div>
         )}
+
+        <footer className="main-footer">
+          <div className="footer-content">
+            <img src="/LogoEGATE.jpg" alt="EGAT Logo" className="footer-logo" />
+            <div className="footer-info">
+              <p><strong>การไฟฟ้าฝ่ายผลิตแห่งประเทศไทย (เหมืองแม่เมาะ)</strong></p>
+              <p>801 หมู่ 6 ต.แม่เมาะ อ.แม่เมาะ จ.ลำปาง 52220</p>
+              <p>ติดต่อสอบถามข้อมูล: ประชาสัมพันธ์เหมืองแม่เมาะ โทร. 0-5425-4051-4</p>
+            </div>
+          </div>
+          <div className="footer-bottom">
+            <span>© 2024 Electricity Generating Authority of Thailand (EGAT)</span>
+            <div className="footer-dot"></div>
+            <span>Powered by dev.warit</span>
+          </div>
+        </footer>
       </main>
     </div>
   );

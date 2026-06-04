@@ -83,7 +83,7 @@ const App: React.FC = () => {
           <img src="/images/images.jfif" alt="Mascot" />
         </div>
         <div className="login-header">
-          <h1>{currentPage === 'login' ? 'ยินดีต้อนรับกลับมา' : 'สร้างบัญชีใหม่'}</h1>
+          <h1>{currentPage === 'login' ? 'EGAT-DashBoard' : 'สร้างบัญชีใหม่'}</h1>
           <p>{currentPage === 'login' ? 'กรุณากรอกข้อมูลเพื่อเข้าสู่ระบบ' : 'กรอกรายละเอียดด้านล่างเพื่อเริ่มต้นใช้งาน'}</p>
         </div>
 
@@ -168,6 +168,14 @@ const App: React.FC = () => {
           )}
         </p>
       </div>
+
+      <footer className="login-footer">
+        <div className="login-footer-content">
+          <p>© 2024 Electricity Generating Authority of Thailand (EGAT)</p>
+          <div className="footer-dot"></div>
+          <p>Mae Moh Mine, Lampang</p>
+        </div>
+      </footer>
     </div>
   );
 };
