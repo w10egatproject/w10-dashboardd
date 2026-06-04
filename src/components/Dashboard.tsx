@@ -55,7 +55,10 @@ interface Project {
 const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   const [view, setView] = useState<'overview' | 'dashboard' | 'reports' | 'status' | 'loadFactor' | 'settings'>('overview');
   const [projects, setProjects] = useState<Project[]>([]);
+  const [debugInfo, setDebugInfo] = useState<{main: number, w11: number, w12: number, w13: number, w14: number}>({main: 0, w11: 0, w12: 0, w13: 0, w14: 0});
   const [weeklyData, setWeeklyData] = useState<{[key: string]: Project[]}>({});
+  const [dashboardW10All, setDashboardW10All] = useState<any[]>([]);
+  const [dashboardW10AllInfo, setDashboardW10AllInfo] = useState<any[]>([]);
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
   const [selectedMonth, setSelectedMonth] = useState<string>("all");
   const [selectedYear, setSelectedYear] = useState<string>("all");
@@ -110,44 +113,85 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
       
       const fetchSheet = async (sheetName: string, range: string, mapper: (row: any, idx: number) => any) => {
         try {
-          const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(sheetName)}!${range}?key=${apiKey}`);
+          const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(sheetName)}!${range}?key=${apiKey}`;
+          const response = await fetch(url);
           const data = await response.json();
-          return data.values ? data.values.map(mapper) : [];
+          
+          if (data.error) {
+            console.error(`API Error for ${sheetName}:`, data.error.message);
+            return [];
+          }
+          
+          if (!data.values) {
+            console.warn(`No data found in ${sheetName} range ${range}`);
+            return [];
+          }
+
+          console.log(`Successfully fetched ${data.values.length} rows from ${sheetName}`);
+          return data.values.map(mapper);
         } catch (e) {
-          console.error(`Error fetching ${sheetName}:`, e);
+          console.error(`Network Error fetching ${sheetName}:`, e);
           return [];
         }
       };
 
-      const mainData = await fetchSheet('data', 'A2:L1000', (row, idx) => ({
-        id: row[0] || `d-${idx}`,
-        ecm: row[2] || '-',
-        name: row[4] || '-',
-        date: row[6] || '-',
-        department: row[8] || '-',
-        status: row[11] || 'รอดำเนินการ',
-        sheetSource: 'data',
-        equipGroup: row[8] || 'General' 
-      }));
+      const parseWeekly = (row: any, idx: number, source: string): Project => {
+        if (source === 'W11') {
+          // Mapping for 'Dashboard W10 All info' starting at Column W
+          // Index: 0=W, 1=X, 2=Y, 3=Z, 4=AA, 5=AB, 6=AC, 7=AD, 8=AE, 9=AF
+          const mainStatus = row[0] || '';
+          const subStatus = row[9] || '';
+          return {
+            id: row[3] || row[1] || `${source}-${idx}`,
+            ecm: row[2] || '-',
+            name: row[4] || row[1] || '-',
+            date: row[6] || '-',
+            department: 'N/A', 
+            status: `${mainStatus} ${subStatus}`.trim() || 'รอดำเนินการ',
+            sheetSource: source,
+            equipGroup: row[5] || 'General' 
+          };
+        }
+        // Default mapping for other weeks (A-I)
+        return {
+          id: row[2] || row[0] || `${source}-${idx}`,
+          ecm: row[1] || '-',
+          name: row[3] || row[0] || '-',
+          date: row[5] || '-',
+          department: 'N/A', 
+          status: row[8] || 'รอดำเนินการ',
+          sheetSource: source,
+          equipGroup: row[4] || 'General' 
+        };
+      };
 
-      const parseWeekly = (row: any, idx: number, source: string): Project => ({
-        id: row[2] || `${source}-${idx}`,
-        ecm: row[1] || '-',
-        name: row[3] || '-',
-        date: row[5] || '-',
-        department: 'N/A', 
-        status: row[8] || 'งานเข้า',
-        sheetSource: source,
-        equipGroup: row[4] || 'General' 
-      });
-
-      const w11 = await fetchSheet('W11', 'A2:I100', (r, i) => parseWeekly(r, i, 'W11'));
+      const w11 = await fetchSheet('Dashboard W10 All info', 'W2:AF500', (r, i) => parseWeekly(r, i, 'W11'));
       const w12 = await fetchSheet('W12', 'A2:I100', (r, i) => parseWeekly(r, i, 'W12'));
       const w13 = await fetchSheet('W13', 'A2:I100', (r, i) => parseWeekly(r, i, 'W13'));
       const w14 = await fetchSheet('W14', 'A2:I100', (r, i) => parseWeekly(r, i, 'W14'));
 
-      setProjects(mainData);
-      setWeeklyData({ W11: w11, W12: w12, W13: w13, W14: w14 });
+      // Also try lowercase if uppercase fails
+      let finalW11 = w11;
+      if (w11.length === 0) {
+        finalW11 = await fetchSheet('Dashboard w10 all info', 'W2:AF500', (r, i) => parseWeekly(r, i, 'W11'));
+      }
+
+      setDebugInfo({
+        main: mainData.length,
+        w11: finalW11.length,
+        w12: w12.length,
+        w13: w13.length,
+        w14: w14.length
+      });
+
+      // Combine all data for Global projects state
+      const allProjects = [...mainData, ...finalW11, ...w12, ...w13, ...w14].filter(p => p.name !== '-' || p.ecm !== '-');
+      
+      setProjects(allProjects);
+      setWeeklyData({ W11: finalW11, W12: w12, W13: w13, W14: w14 });
+      
+      setDashboardW10All(await fetchSheet('Dashboard w10 all', 'A2:Z200', r => r));
+      setDashboardW10AllInfo(await fetchSheet('Dashboard W10 All info', 'A2:Z200', r => r));
       };
 
     fetchData();
