@@ -361,25 +361,12 @@ async function applyFilters() {
             </div>
           </div>
 
-          <!-- Gauges Section -->
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-            <div v-for="week in weeks" :key="`gauge-${week}`" class="p-3 bg-slate-50 rounded-xl border border-slate-100 text-center">
-              <p class="text-xs font-black text-slate-700 mb-2">{{ week }}</p>
-              <div class="grid grid-cols-2 gap-2">
-                <div v-for="(val, key) in data?.wGauges[week]" :key="key" class="text-[9px] font-bold text-slate-500">
-                  <p class="text-lg font-black text-slate-900">{{ val }}</p>
-                  {{ key }}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="flex-1 grid grid-cols-2 gap-3 my-auto">
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 justify-items-center">
             <!-- Weekly Compact Cards 1-4 -->
             <div 
               v-for="(week, index) in weeks" 
               :key="`wo-card-${week}`" 
-              class="rounded-xl p-3 border flex flex-col relative overflow-hidden group hover:shadow-md transition-all"
+              class="w-full max-w-sm rounded-2xl p-5 border flex flex-col relative overflow-hidden group hover:shadow-xl transition-all"
               :class="[
                 index === 0 ? 'bg-sky-50/50 border-sky-100' : 
                 index === 1 ? 'bg-emerald-50/50 border-emerald-100' : 
@@ -388,7 +375,7 @@ async function applyFilters() {
               ]"
             >
               <div 
-                class="absolute top-0 right-0 px-2 py-0.5 text-[8px] font-black uppercase rounded-bl-lg tracking-tighter"
+                class="absolute top-0 right-0 px-3 py-1 text-[10px] font-black uppercase rounded-bl-xl tracking-tighter"
                 :class="[
                   index === 0 ? 'bg-sky-200 text-sky-600' : 
                   index === 1 ? 'bg-emerald-200 text-emerald-600' : 
@@ -396,53 +383,73 @@ async function applyFilters() {
                   'bg-amber-200 text-amber-600'
                 ]"
               >
-                CARD {{ index + 1 }}
+                {{ week }}
               </div>
               
-              <div class="flex items-center gap-2 mb-3">
+              <div class="flex items-center gap-4 mb-6">
                 <!-- User Image -->
-                <div class="relative">
+                <div class="relative shrink-0">
                   <img 
                     :src="index === 0 ? '/images/chanwit-Photoroom.png' : index === 1 ? '/images/saman-Photoroom.png' : index === 2 ? '/images/sitiporn-Photoroom.png' : '/images/wutisak-Photoroom.png'" 
-                    class="w-7 h-7 rounded-full object-cover ring-2 ring-white shadow-sm"
+                    class="w-12 h-12 rounded-full object-cover ring-2 ring-white shadow-sm"
                     alt="User"
                   />
                   <div 
-                    class="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-white"
+                    class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border border-white"
                     :class="index === 0 ? 'bg-sky-500' : index === 1 ? 'bg-emerald-500' : index === 2 ? 'bg-indigo-500' : 'bg-amber-500'"
                   ></div>
                 </div>
-                <span class="text-[11px] font-black text-slate-700">{{ week }}</span>
+                <div class="flex flex-col">
+                  <span class="text-base font-black text-slate-900">{{ week }}</span>
+                </div>
               </div>
               
-              <div class="grid grid-cols-2 gap-x-3 gap-y-3">
+              <div class="grid grid-cols-2 gap-y-4 gap-x-3">
                 <!-- Entrance -->
                 <div class="flex flex-col">
-                  <p class="text-[9px] font-black leading-tight mb-0.5" :class="index === 0 ? 'text-sky-600' : index === 1 ? 'text-emerald-600' : index === 2 ? 'text-indigo-600' : 'text-amber-600'">เข้า</p>
-                  <p class="text-sm font-black text-slate-900 leading-none">{{ data?.groupStats[week]?.entrance || 0 }}</p>
+                  <p class="text-[11px] font-black uppercase text-slate-500 leading-tight">เข้า</p>
+                  <p class="text-2xl font-black text-slate-950 leading-none">{{ data?.groupStats[week]?.entrance || 0 }}</p>
                 </div>
                 <!-- Finished -->
                 <div class="flex flex-col">
-                  <p class="text-[9px] font-black text-emerald-600 leading-tight mb-0.5">เข้าเดือนนี้<br/>เสร็จแล้ว</p>
-                  <p class="text-sm font-black text-slate-900 leading-none">{{ data?.groupStats[week]?.finish || 0 }}</p>
+                  <p class="text-[11px] font-black uppercase text-emerald-600 leading-tight">เสร็จ</p>
+                  <p class="text-2xl font-black text-slate-950 leading-none">{{ data?.groupStats[week]?.finish || 0 }}</p>
                 </div>
                 <!-- Pending/Carried Over -->
                 <div class="flex flex-col">
-                  <p class="text-[9px] font-black text-blue-600 leading-tight mb-0.5">เข้าเดือนนี้<br/>ยังไม่เสร็จ</p>
-                  <p class="text-sm font-black text-slate-900 leading-none">{{ data?.groupStats[week]?.left || 0 }}</p>
+                  <p class="text-[11px] font-black uppercase text-blue-600 leading-tight">ค้าง</p>
+                  <p class="text-2xl font-black text-slate-950 leading-none">{{ data?.groupStats[week]?.left || 0 }}</p>
                 </div>
                 <!-- Other Finished -->
                 <div class="flex flex-col">
-                  <p class="text-[9px] font-black text-amber-600 leading-tight mb-0.5">เสร็จจาก<br/>เดือนอื่น</p>
-                  <p class="text-sm font-black text-slate-900 leading-none">{{ data?.groupStats[week]?.otherFinish || 0 }}</p>
+                  <p class="text-[11px] font-black uppercase text-amber-600 leading-tight">เดือนอื่น</p>
+                  <p class="text-2xl font-black text-slate-950 leading-none">{{ data?.groupStats[week]?.otherFinish || 0 }}</p>
                 </div>
                 <!-- Outflow -->
-                <div class="flex flex-col">
-                  <p class="text-[9px] font-black text-slate-400 leading-tight mb-0.5">งานออก<br/>ทั้งหมด</p>
-                  <p class="text-sm font-black text-slate-700 leading-none">{{ data?.groupStats[week]?.out || 0 }}</p>
+                <div class="flex flex-col col-span-2 pt-3 mt-1 border-t border-slate-200/50">
+                  <p class="text-[11px] font-black uppercase text-slate-500 leading-tight">งานออกทั้งหมด</p>
+                  <p class="text-3xl font-black text-slate-950 leading-none mt-1">{{ data?.groupStats[week]?.out || 0 }}</p>
                 </div>
               </div>
             </div>
+          </div>
+
+          <!-- Gauges Section (Enhanced and Centered) -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 place-items-center">
+            <div v-for="week in weeks" :key="`gauge-container-${week}`" class="w-full p-5 bg-white rounded-2xl border border-slate-200 shadow-sm">
+              <p class="text-base font-black text-slate-900 mb-6 text-left border-b border-slate-100 pb-3">{{ week }} - เกจ์วัดความสมดุล</p>
+              <div class="flex flex-wrap justify-center gap-6">
+                <div v-for="(val, key) in data?.wGauges[week]" :key="key" class="bg-slate-50 p-4 rounded-xl border border-slate-100 flex flex-col items-center">
+                   <GaugeChart :value="val" :label="key" class="scale-150 mb-2" />
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="flex justify-center mt-6 p-4 bg-slate-900 rounded-2xl">
+             <span class="text-sm font-black text-white px-8 py-2">
+                  รวม W/O ทั้งหมด: {{ data?.statusData.totalWorkOrders || 0 }}
+             </span>
           </div>
         </div>
 

@@ -89,7 +89,8 @@ function buildStatusData(infoRows: SheetRows) {
   const sap = numberAt(infoRows, 5, 11);
   const pending = numberAt(infoRows, 6, 11);
   const finish = numberAt(infoRows, 7, 11);
-  return { sap, pending, finish, total: sap + pending + finish };
+  const totalWorkOrders = numberAt(infoRows, 7, 16);
+  return { sap, pending, finish, total: sap + pending + finish, totalWorkOrders };
 }
 
 function buildWGauges(infoRows: SheetRows) {
