@@ -36,18 +36,18 @@ interface DashboardData {
 
 const weeks: WeekKey[] = ['W11', 'W12', 'W13', 'W14'];
 const months = [
-  'มกราคม',
-  'กุมภาพันธ์',
-  'มีนาคม',
-  'เมษายน',
-  'พฤษภาคม',
-  'มิถุนายน',
-  'กรกฎาคม',
-  'สิงหาคม',
-  'กันยายน',
-  'ตุลาคม',
-  'พฤศจิกายน',
-  'ธันวาคม',
+  { label: 'มกราคม', value: '1' },
+  { label: 'กุมภาพันธ์', value: '2' },
+  { label: 'มีนาคม', value: '3' },
+  { label: 'เมษายน', value: '4' },
+  { label: 'พฤษภาคม', value: '5' },
+  { label: 'มิถุนายน', value: '6' },
+  { label: 'กรกฎาคม', value: '7' },
+  { label: 'สิงหาคม', value: '8' },
+  { label: 'กันยายน', value: '9' },
+  { label: 'ตุลาคม', value: '10' },
+  { label: 'พฤศจิกายน', value: '11' },
+  { label: 'ธันวาคม', value: '12' },
 ];
 const years = Array.from({ length: 10 }, (_, index) => String(2020 + index));
 
@@ -235,6 +235,44 @@ async function applyFilters() {
           สรุปโอที
         </button>
       </div>
+
+      <div class="filter-panel rounded-xl p-5 mb-6 border-sky-200 shadow-lg shadow-sky-900/5 bg-white">
+          <div class="flex flex-col lg:flex-row lg:items-center gap-4">
+            <div class="flex items-center gap-3 shrink-0">
+              <div class="p-2 bg-sky-600 rounded-lg text-white">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+              </div>
+              <div>
+                <p class="text-sm font-extrabold text-sky-950 uppercase tracking-wider">ตัวกรองข้อมูล</p>
+                <p class="text-[10px] font-bold text-sky-700 uppercase">เลือกเดือน/ปีเพื่อกรองข้อมูลในตาราง</p>
+              </div>
+            </div>
+            
+            <div class="grid grid-cols-2 lg:flex lg:items-center gap-3 flex-1">
+              <div class="flex-1 space-y-1">
+                <select v-model="selectedMonth" class="select select-bordered select-sm w-full h-10 font-bold bg-slate-50 text-slate-900 border-slate-200 focus:border-sky-500 focus:ring-sky-500">
+                  <option value="all">ทุกเดือน</option>
+                  <option v-for="month in months" :key="month.value" :value="month.value">{{ month.label }}</option>
+                </select>
+              </div>
+              <div class="flex-1 space-y-1">
+                <select v-model="selectedYear" class="select select-bordered select-sm w-full h-10 font-bold bg-slate-50 text-slate-900 border-slate-200 focus:border-sky-500 focus:ring-sky-500">
+                  <option value="all">ทุกปี</option>
+                  <option v-for="year in years" :key="year" :value="year">{{ year }}</option>
+                </select>
+              </div>
+              
+              <button 
+                class="btn btn-sm h-10 px-6 bg-sky-600 text-white border-none hover:bg-sky-700"
+                :disabled="isApplyingFilters || pending"
+                @click="applyFilters"
+              >
+                <span v-if="isApplyingFilters" class="loading loading-spinner loading-xs"></span>
+                <span>กรองข้อมูล</span>
+              </button>
+            </div>
+          </div>
+        </div>
 
       <div v-if="pending && !data" class="mb-6 rounded-xl border border-sky-200 bg-sky-50 px-5 py-4 text-sm font-bold text-sky-800 flex items-center gap-3 animate-pulse">
         <div class="w-4 h-4 border-2 border-sky-800 border-t-transparent rounded-full animate-spin"></div>
@@ -531,44 +569,6 @@ async function applyFilters() {
 
       <template v-else-if="activeTab === 'report'">
       <section class="space-y-4">
-        <div class="filter-panel rounded-xl p-5 border-sky-200 shadow-lg shadow-sky-900/5 bg-white">
-          <div class="flex flex-col lg:flex-row lg:items-center gap-4">
-            <div class="flex items-center gap-3 shrink-0">
-              <div class="p-2 bg-sky-600 rounded-lg text-white">
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
-              </div>
-              <div>
-                <p class="text-sm font-extrabold text-sky-950 uppercase tracking-wider">ตัวกรองข้อมูล</p>
-                <p class="text-[10px] font-bold text-sky-700 uppercase">เลือกเดือน/ปีเพื่อกรองข้อมูลในตาราง</p>
-              </div>
-            </div>
-            
-            <div class="grid grid-cols-2 lg:flex lg:items-center gap-3 flex-1">
-              <div class="flex-1 space-y-1">
-                <select v-model="selectedMonth" class="select select-bordered select-sm w-full h-10 font-bold bg-slate-50 text-slate-900 border-slate-200 focus:border-sky-500 focus:ring-sky-500">
-                  <option value="all">ทุกเดือน</option>
-                  <option v-for="month in months" :key="month" :value="month">{{ month }}</option>
-                </select>
-              </div>
-              <div class="flex-1 space-y-1">
-                <select v-model="selectedYear" class="select select-bordered select-sm w-full h-10 font-bold bg-slate-50 text-slate-900 border-slate-200 focus:border-sky-500 focus:ring-sky-500">
-                  <option value="all">ทุกปี</option>
-                  <option v-for="year in years" :key="year" :value="year">{{ Number(year) + 543 }}</option>
-                </select>
-              </div>
-            </div>
-
-            <button 
-              class="btn btn-sm h-10 px-8 font-black tracking-tight text-slate-950 bg-white border border-slate-300 shadow-sm hover:bg-slate-50 active:scale-[0.98] transition-transform shrink-0" 
-              :disabled="isApplyingFilters || pending" 
-              @click="applyFilters"
-            >
-              <span v-if="isApplyingFilters" class="loading loading-spinner loading-xs"></span>
-              อัปเดตรายการงาน
-            </button>
-          </div>
-        </div>
-
         <div class="dashboard-card rounded-xl shadow-xl overflow-hidden border-none bg-white">
         <div class="p-6">
           <div class="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
