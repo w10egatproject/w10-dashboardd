@@ -307,7 +307,7 @@ async function applyFilters() {
             </div>
 
             <!-- Status Cards -->
-            <div v-for="card in statusCards" :key="card.title" class="min-h-[170px] rounded-xl border border-slate-200 p-6 flex flex-col relative overflow-hidden group hover:shadow-lg transition-all" :class="card.soft">
+            <div v-for="card in statusCards" :key="card.title" class="min-h-[170px] rounded-xl border border-slate-200 p-6 flex flex-col relative overflow-hidden group hover:shadow-xl transition-all cursor-pointer hover:-translate-y-1" :class="card.soft">
               <div class="absolute top-0 left-0 w-full h-1.5" :class="card.accent"></div>
               
               <div class="flex items-start justify-between mb-3">
