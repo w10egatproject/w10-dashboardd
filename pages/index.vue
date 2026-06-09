@@ -361,6 +361,19 @@ async function applyFilters() {
             </div>
           </div>
 
+          <!-- Gauges Section -->
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+            <div v-for="week in weeks" :key="`gauge-${week}`" class="p-3 bg-slate-50 rounded-xl border border-slate-100 text-center">
+              <p class="text-xs font-black text-slate-700 mb-2">{{ week }}</p>
+              <div class="grid grid-cols-2 gap-2">
+                <div v-for="(val, key) in data?.wGauges[week]" :key="key" class="text-[9px] font-bold text-slate-500">
+                  <p class="text-lg font-black text-slate-900">{{ val }}</p>
+                  {{ key }}
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="flex-1 grid grid-cols-2 gap-3 my-auto">
             <!-- Weekly Compact Cards 1-4 -->
             <div 
@@ -417,6 +430,11 @@ async function applyFilters() {
                 <div class="flex flex-col">
                   <p class="text-[9px] font-black text-blue-600 leading-tight mb-0.5">เข้าเดือนนี้<br/>ยังไม่เสร็จ</p>
                   <p class="text-sm font-black text-slate-900 leading-none">{{ data?.groupStats[week]?.left || 0 }}</p>
+                </div>
+                <!-- Other Finished -->
+                <div class="flex flex-col">
+                  <p class="text-[9px] font-black text-amber-600 leading-tight mb-0.5">เสร็จจาก<br/>เดือนอื่น</p>
+                  <p class="text-sm font-black text-slate-900 leading-none">{{ data?.groupStats[week]?.otherFinish || 0 }}</p>
                 </div>
                 <!-- Outflow -->
                 <div class="flex flex-col">
