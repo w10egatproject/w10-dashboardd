@@ -457,16 +457,11 @@ async function applyFilters() {
                   ></div>
                 </div>
                 <div class="flex flex-col">
-                  <span class="text-base font-black text-slate-900">{{ week }}</span>
+                  <span class="text-base font-black text-slate-900">{{ week }} เข้า {{ data?.groupStats[week]?.entrance || 0 }}</span>
                 </div>
               </div>
               
               <div class="grid grid-cols-2 gap-y-4 gap-x-3">
-                <!-- Entrance -->
-                <div class="flex flex-col">
-                  <p class="text-[11px] font-black uppercase text-slate-500 leading-tight">เข้า</p>
-                  <p class="text-2xl font-black text-slate-950 leading-none">{{ data?.groupStats[week]?.entrance || 0 }}</p>
-                </div>
                 <!-- Finished -->
                 <div class="flex flex-col">
                   <p class="text-[11px] font-black uppercase text-emerald-600 leading-tight">เสร็จ</p>
