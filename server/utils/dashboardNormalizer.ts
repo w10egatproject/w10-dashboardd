@@ -19,17 +19,17 @@ function isTrue(value: unknown) {
 function projectFromRow(row: string[], index: number, source = 'Main') {
   return {
     id: text(row[3]) || text(row[0]) || `${source}-${index}`,
-    item: text(row[0]),
-    sequence: text(row[1]),
-    ecm: text(row[2]) || '-',
+    ecmProcurement: text(row[2]),
+    ecm: text(row[2]),
     order: text(row[3]) || '-',
     name: text(row[4]) || '-',
-    description: text(row[4]) || '-',
     equipGroup: text(row[5]) || 'General',
     date: text(row[6]) || '-',
-    department: text(row[8]) || 'N/A',
+    startDate: text(row[28]) || '-',
+    endDate: text(row[29]) || '-',
     status: text(row[11]) || 'รอดำเนินการ',
-    sheetSource: source,
+    action: text(row[21]) || '-',
+    department: text(row[8]) || 'N/A',
   };
 }
 
@@ -49,9 +49,20 @@ function buildProjects(infoRows: SheetRows) {
   return { projects, weeklyProjects };
 }
 
-function buildGroupStats(infoRows: SheetRows) {
+function buildGroupStats(infoRows: SheetRows, weeklyProjects: Record<string, any[]>) {
+  const w11Projects = weeklyProjects.W11 || [];
+  const w11FinishProjects = w11Projects.filter(p => p.status.toLowerCase().includes('เสร็จ') || p.status.toLowerCase().includes('finish') || p.status.toLowerCase().includes('sap'));
+  const w11PendingProjects = w11Projects.filter(p => p.status.toLowerCase().includes('รอ') || p.status.toLowerCase().includes('pending'));
+  const w11OtherFinish = numberAt(infoRows, 3, 23);
+
   const groupStats = {
-    W11: { entrance: numberAt(infoRows, 0, 23), left: numberAt(infoRows, 1, 23), finish: numberAt(infoRows, 2, 23), otherFinish: numberAt(infoRows, 3, 23), out: numberAt(infoRows, 4, 23) },
+    W11: {
+      entrance: w11Projects.length,
+      left: w11PendingProjects.length,
+      finish: w11FinishProjects.length,
+      otherFinish: w11OtherFinish,
+      out: w11FinishProjects.length + w11OtherFinish
+    },
     W12: { entrance: numberAt(infoRows, 0, 27), left: numberAt(infoRows, 1, 27), finish: numberAt(infoRows, 2, 27), otherFinish: numberAt(infoRows, 3, 27), out: numberAt(infoRows, 4, 27) },
     W13: { entrance: numberAt(infoRows, 0, 31), left: numberAt(infoRows, 1, 31), finish: numberAt(infoRows, 2, 31), otherFinish: numberAt(infoRows, 3, 31), out: numberAt(infoRows, 4, 31) },
     W14: { entrance: numberAt(infoRows, 0, 35), left: numberAt(infoRows, 1, 35), finish: numberAt(infoRows, 2, 35), otherFinish: numberAt(infoRows, 3, 35), out: numberAt(infoRows, 4, 35) },
@@ -102,11 +113,28 @@ function buildWGauges(infoRows: SheetRows) {
   };
 }
 
+function buildProcurementData(infoRows: SheetRows) {
+  const statusSummary = Array.from({ length: 8 }, (_, i) => ({
+    status: infoRows[1 + i][73],
+    count: numberAt(infoRows, 1 + i, 74)
+  }));
+
+  const weeklyTotals = Array.from({ length: 4 }, (_, i) => ({
+    week: infoRows[11 + i][73],
+    amount: numberAt(infoRows, 11 + i, 74)
+  }));
+
+  const totalProcurement = numberAt(infoRows, 15, 74); // Total row BV16
+
+  return { statusSummary, weeklyTotals, totalProcurement };
+}
+
 export function normalizeDashboard(rawSheets: { dashboard: SheetRows; info: SheetRows }, filters: { year?: string; month?: string } = {}) {
   const infoRows = rawSheets.info || [];
   const { projects, weeklyProjects } = buildProjects(infoRows);
-  const groupStats = buildGroupStats(infoRows);
+  const groupStats = buildGroupStats(infoRows, weeklyProjects);
   const statusData = buildStatusData(infoRows);
+  const procurementData = buildProcurementData(infoRows);
   const sheetYearRaw = text(infoRows[1]?.[2]) || '2025';
   const sheetMonthRaw = text(infoRows[2]?.[2]) || 'all';
 
@@ -121,6 +149,7 @@ export function normalizeDashboard(rawSheets: { dashboard: SheetRows; info: Shee
     w_all: { entrance: groupStats.W_all.entrance },
     statusData,
     equipmentData: buildEquipmentData(infoRows),
+    procurementData,
     currentYear: filters.year || (sheetYearRaw === 'All' ? 'all' : sheetYearRaw),
     currentMonth: filters.month || (sheetMonthRaw === 'รวมทุกเดือน' ? 'all' : sheetMonthRaw),
     debugInfo: {

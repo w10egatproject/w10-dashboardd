@@ -3,25 +3,29 @@ type WeekKey = 'W11' | 'W12' | 'W13' | 'W14';
 
 interface DashboardProject {
   id: string;
-  ecm: string;
-  order: string;
-  name: string;
-  equipGroup: string;
-  date: string;
+  ecmProcurement: string; // ECM ซื้อจ้าง
+  ecm: string; // ECM
+  order: string; // W/O
+  name: string; // รายการ
+  equipGroup: string; // Equip
+  date: string; // Date เข้า
+  startDate: string; // Date เริ่มงาน
+  endDate: string; // Date ออกงาน
+  status: string; // สถานะ
+  action: string; // การดำเนินการ
   department: string;
-  status: string;
 }
-
 interface DashboardData {
   projects: DashboardProject[];
-  groupStats: Record<WeekKey, { entrance: number; left: number; finish: number; out: number }> & {
-    W_all: { entrance: number; left: number; finish: number; out: number };
+  groupStats: Record<WeekKey, { entrance: number; left: number; finish: number; otherFinish: number; out: number }> & {
+    W_all: { entrance: number; left: number; finish: number; otherFinish: number; out: number };
   };
   statusData: {
     sap: number;
     pending: number;
     finish: number;
     total: number;
+    totalWorkOrders: number;
   };
   wGauges: Record<WeekKey, { empNorm: number; conNorm: number; empOT: number; conOT: number }>;
   equipmentData: Array<{
@@ -29,6 +33,11 @@ interface DashboardData {
     values: number[];
     total: number;
   }>;
+  procurementData: {
+    statusSummary: Array<{ status: string; count: number }>;
+    weeklyTotals: Array<{ week: string; amount: number }>;
+    totalProcurement: number;
+  };
   currentYear: string;
   currentMonth: string;
   timestamp: string;
@@ -102,15 +111,15 @@ const filteredProjects = computed(() => {
 
 const statusCards = computed(() => [
   {
-    title: 'SAP Comp',
-    subtitle: 'บันทึกปิดงานในระบบ',
-    value: sap.value,
-    percent: percent(sap.value, total.value),
-    accent: 'bg-blue-600',
-    text: 'text-blue-700',
-    soft: 'bg-blue-50/50',
-    icon: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
-    description: 'งานที่สมบูรณ์ 100%'
+    title: 'Pending',
+    subtitle: 'รอดำเนินการ',
+    value: pendingCount.value,
+    percent: percent(pendingCount.value, total.value),
+    accent: 'bg-amber-500',
+    text: 'text-amber-700',
+    soft: 'bg-amber-50/50',
+    icon: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+    description: 'งานที่กำลังดำเนินการ'
   },
   {
     title: 'Finish',
@@ -124,15 +133,15 @@ const statusCards = computed(() => [
     description: 'รอการตรวจสอบขั้นสุดท้าย'
   },
   {
-    title: 'Pending',
-    subtitle: 'รอดำเนินการ',
-    value: pendingCount.value,
-    percent: percent(pendingCount.value, total.value),
-    accent: 'bg-amber-500',
-    text: 'text-amber-700',
-    soft: 'bg-amber-50/50',
-    icon: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
-    description: 'งานที่กำลังดำเนินการ'
+    title: 'SAP Comp',
+    subtitle: 'บันทึกปิดงานในระบบ',
+    value: sap.value,
+    percent: percent(sap.value, total.value),
+    accent: 'bg-blue-600',
+    text: 'text-blue-700',
+    soft: 'bg-blue-50/50',
+    icon: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
+    description: 'งานที่สมบูรณ์ 100%'
   },
 ]);
 
@@ -163,6 +172,54 @@ function statusBadge(status: string) {
   if (lower.includes('sap')) 
     return 'bg-sky-50 text-sky-700 ring-1 ring-sky-600/20';
   return 'bg-slate-50 text-slate-600 ring-1 ring-slate-600/20';
+}
+
+function getProcurementColor(index: number) {
+  const colors = ['#3b82f6', '#f59e0b', '#10b981', '#ef4444'];
+  return colors[index % colors.length];
+}
+
+function getStatusColor(status: string) {
+  const colors: Record<string, string> = {
+    'ดำเนินการ': '#a855f7',
+    '1.รอซื้อจ้าง': '#991b1b',
+    '2.กบย-ช': '#3b82f6',
+    '3.หซ,หจ': '#a3e635',
+    '4.เสนอราคา': '#fb923c',
+    '5.ติดตามPO': '#4d7c0f',
+    '6.ส่งของ': '#3b82f6',
+    'เสร็จ': '#22c55e'
+  };
+  return colors[status] || '#64748b';
+}
+
+function getDonutPath(index: number, items: any[]) {
+  const total = items.reduce((acc, curr) => acc + curr.amount, 0);
+  let startAngle = 0;
+  for (let i = 0; i < index; i++) {
+    startAngle += (items[i].amount / total) * 360;
+  }
+  const endAngle = startAngle + (items[index].amount / total) * 360;
+
+  const x1 = 18 + 18 * Math.cos((startAngle - 90) * Math.PI / 180);
+  const y1 = 18 + 18 * Math.sin((startAngle - 90) * Math.PI / 180);
+  const x2 = 18 + 18 * Math.cos((endAngle - 90) * Math.PI / 180);
+  const y2 = 18 + 18 * Math.sin((endAngle - 90) * Math.PI / 180);
+
+  const largeArcFlag = endAngle - startAngle > 180 ? 1 : 0;
+
+  return `M 18 18 L ${x1} ${y1} A 18 18 0 ${largeArcFlag} 1 ${x2} ${y2} Z`;
+}
+
+function getLabelPosition(index: number, items: any[]) {
+  // Fixed positions based on the 4 possible sectors (top, right, bottom, left)
+  const positions = [
+    { top: '-20px', left: '110px' },  // Top
+    { top: '100px', left: '220px' },  // Right
+    { top: '220px', left: '110px' },  // Bottom
+    { top: '100px', left: '-20px' },  // Left
+  ];
+  return positions[index % positions.length];
 }
 
 async function applyFilters() {
@@ -280,7 +337,7 @@ async function applyFilters() {
       </div>
 
       <template v-if="activeTab === 'dashboard'">
-      <section class="mb-4 grid gap-3 xl:grid-cols-1">
+      <section class="mb-4 grid gap-3 grid-cols-1">
         <div class="dashboard-card rounded-xl p-4 sm:p-5">
           <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <!-- Total W/O Card -->
@@ -348,7 +405,7 @@ async function applyFilters() {
         <span>โหลดข้อมูลไม่สำเร็จ: {{ error.message }}</span>
       </div>
 
-      <section class="grid gap-4 xl:grid-cols-1">
+      <section class="grid gap-4 grid-cols-1">
         <div class="dashboard-card rounded-xl p-5 sm:p-6 flex flex-col h-full relative overflow-hidden">
           <div class="absolute top-0 left-0 w-1.5 h-full bg-sky-600"></div>
           <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 pb-4">
@@ -386,28 +443,30 @@ async function applyFilters() {
                 {{ week }}
               </div>
               
-              <div class="flex items-center justify-between gap-4 mb-6">
-                <!-- Image (Left) and Data (Right) -->
-                <div class="flex items-center gap-3">
-                   <div class="relative shrink-0">
-                     <img 
-                       :src="index === 0 ? '/images/chanwit-Photoroom.png' : index === 1 ? '/images/saman-Photoroom.png' : index === 2 ? '/images/sitiporn-Photoroom.png' : '/images/wutisak-Photoroom.png'" 
-                       class="w-12 h-12 rounded-full object-cover ring-2 ring-white shadow-sm"
-                       alt="User"
-                     />
-                     <div 
-                       class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border border-white"
-                       :class="index === 0 ? 'bg-sky-500' : index === 1 ? 'bg-emerald-500' : index === 2 ? 'bg-indigo-500' : 'bg-amber-500'"
-                     ></div>
-                   </div>
-                   <div class="flex flex-col items-start">
-                     <span class="text-base font-black text-slate-900">{{ week }}</span>
-                     <p class="text-[10px] font-black uppercase text-slate-500 leading-tight">เข้า {{ data?.groupStats[week]?.entrance || 0 }}</p>
-                   </div>
+              <div class="flex items-center gap-4 mb-6">
+                <!-- User Image -->
+                <div class="relative shrink-0">
+                  <img 
+                    :src="index === 0 ? '/images/chanwit-Photoroom.png' : index === 1 ? '/images/saman-Photoroom.png' : index === 2 ? '/images/sitiporn-Photoroom.png' : '/images/wutisak-Photoroom.png'" 
+                    class="w-12 h-12 rounded-full object-cover ring-2 ring-white shadow-sm"
+                    alt="User"
+                  />
+                  <div 
+                    class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border border-white"
+                    :class="index === 0 ? 'bg-sky-500' : index === 1 ? 'bg-emerald-500' : index === 2 ? 'bg-indigo-500' : 'bg-amber-500'"
+                  ></div>
+                </div>
+                <div class="flex flex-col">
+                  <span class="text-base font-black text-slate-900">{{ week }}</span>
                 </div>
               </div>
               
               <div class="grid grid-cols-2 gap-y-4 gap-x-3">
+                <!-- Entrance -->
+                <div class="flex flex-col">
+                  <p class="text-[11px] font-black uppercase text-slate-500 leading-tight">เข้า</p>
+                  <p class="text-2xl font-black text-slate-950 leading-none">{{ data?.groupStats[week]?.entrance || 0 }}</p>
+                </div>
                 <!-- Finished -->
                 <div class="flex flex-col">
                   <p class="text-[11px] font-black uppercase text-emerald-600 leading-tight">เสร็จ</p>
@@ -415,7 +474,7 @@ async function applyFilters() {
                 </div>
                 <!-- Pending/Carried Over -->
                 <div class="flex flex-col">
-                  <p class="text-[11px] font-black uppercase text-blue-600 leading-tight">ยังไม่เสร็จ</p>
+                  <p class="text-[11px] font-black uppercase text-blue-600 leading-tight">ค้าง</p>
                   <p class="text-2xl font-black text-slate-950 leading-none">{{ data?.groupStats[week]?.left || 0 }}</p>
                 </div>
                 <!-- Other Finished -->
@@ -423,8 +482,6 @@ async function applyFilters() {
                   <p class="text-[11px] font-black uppercase text-amber-600 leading-tight">เดือนอื่น</p>
                   <p class="text-2xl font-black text-slate-950 leading-none">{{ data?.groupStats[week]?.otherFinish || 0 }}</p>
                 </div>
-                <!-- Placeholder for grid symmetry -->
-                <div></div>
                 <!-- Outflow -->
                 <div class="flex flex-col col-span-2 pt-3 mt-1 border-t border-slate-200/50">
                   <p class="text-[11px] font-black uppercase text-slate-500 leading-tight">งานออกทั้งหมด</p>
@@ -434,13 +491,26 @@ async function applyFilters() {
             </div>
           </div>
 
-          <!-- Gauges Section (Removed from Weekly Cards) -->
+          <!-- Gauges Section (Enhanced and Centered) -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 place-items-center">
+            <div v-for="week in weeks" :key="`gauge-container-${week}`" class="w-full p-5 bg-white rounded-2xl border border-slate-200 shadow-sm">
+              <p class="text-base font-black text-slate-900 mb-6 text-left border-b border-slate-100 pb-3">{{ week }} - เกจ์วัดความสมดุล</p>
+              <div class="flex flex-wrap justify-center gap-6">
+                <div v-for="(val, key) in data?.wGauges[week]" :key="key" class="bg-slate-50 p-4 rounded-xl border border-slate-100 flex flex-col items-center">
+                   <GaugeChart :value="val" :label="key" class="scale-150 mb-2" />
+                </div>
+              </div>
+            </div>
+          </div>
           
+          <div class="flex justify-center mt-6 p-4 bg-slate-900 rounded-2xl">
+             <span class="text-sm font-black text-white px-8 py-2">
+                  รวม W/O ทั้งหมด: {{ data?.statusData.totalWorkOrders || 0 }}
+             </span>
+          </div>
         </div>
       </section>
 
-      <!-- New Independent Gauge Section -->
-      <!-- New Independent Gauge Section -->
       <section class="mt-4 grid gap-4 xl:grid-cols-2">
         <!-- Card 1: Bar Chart -->
         <div class="dashboard-card rounded-xl p-5 sm:p-6 shadow-lg bg-white border-none relative overflow-hidden flex flex-col h-full">
@@ -540,49 +610,70 @@ async function applyFilters() {
           </div>
         </div>
       </section>
-
-      <section class="mt-4">
-        <div class="dashboard-card rounded-xl p-6 bg-white border border-slate-200 shadow-sm">
-          <h2 class="text-xl font-extrabold text-slate-900 mb-6 flex items-center gap-2">
-            <div class="w-1.5 h-6 bg-indigo-600 rounded-full"></div>
-            LOAD FACTOR / MAN
-          </h2>
-          
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div v-for="week in weeks" :key="`gauge-container-${week}`" class="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 shadow-sm space-y-4">
-              <p class="text-base font-black text-slate-900 border-b border-slate-200 pb-2">{{ week }}</p>
-
-              <!-- MAN Section -->
-              <div>
-                <p class="text-[10px] font-black text-slate-500 mb-2 uppercase tracking-wider">MAN</p>
-                <div class="flex justify-center gap-2">
-                   <GaugeChart :value="data?.wGauges[week]?.empNorm || 0" label="Emp" class="scale-100" />
-                   <GaugeChart :value="data?.wGauges[week]?.conNorm || 0" label="Con" class="scale-100" />
-                </div>
-              </div>
-
-              <!-- LOAD FACTOR Section -->
-              <div>
-                <p class="text-[10px] font-black text-slate-500 mb-2 uppercase tracking-wider">LOAD FACTOR</p>
-                <div class="flex justify-center gap-2">
-                   <GaugeChart :value="data?.wGauges[week]?.empOT || 0" label="Emp OT" class="scale-100" />
-                   <GaugeChart :value="data?.wGauges[week]?.conOT || 0" label="Con OT" class="scale-100" />
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <div class="flex justify-center mt-6 p-4 bg-slate-900 rounded-2xl">
-             <span class="text-sm font-black text-white px-8 py-2">
-                  รวม W/O ทั้งหมด: {{ data?.statusData.totalWorkOrders || 0 }}
-             </span>
-          </div>
-        </div>
-      </section>
       </template>
 
       <template v-else-if="activeTab === 'report'">
       <section class="space-y-4">
+        <!-- Procurement Chart Card (MOVED TO TOP) -->
+        <div class="dashboard-card rounded-xl shadow-xl overflow-hidden border-none bg-white p-6 mb-6">
+          <h3 class="text-lg font-black text-slate-900 mb-6 text-center">กราฟสรุปปริมาณซื้อจ้างรายสัปดาห์</h3>
+          <div class="flex items-center justify-center">
+            <div class="relative w-64 h-64">
+              <!-- SVG Donut Chart -->
+              <svg viewBox="0 0 36 36" class="w-full h-full">
+                <path
+                  v-for="(item, index) in data?.procurementData.weeklyTotals"
+                  :key="item.week"
+                  :d="getDonutPath(index, data?.procurementData.weeklyTotals)"
+                  :fill="getProcurementColor(index)"
+                  stroke="white"
+                  stroke-width="0.5"
+                />
+                <circle cx="18" cy="18" r="8" fill="white" />
+              </svg>
+              <!-- Labels placed in boxes around the chart -->
+              <div v-for="(item, index) in data?.procurementData.weeklyTotals" :key="`label-${item.week}`" class="absolute" :style="getLabelPosition(index, data?.procurementData.weeklyTotals)">
+                 <div class="text-[10px] font-black text-slate-800 bg-white px-2 py-1 rounded shadow border border-slate-200 text-center pointer-events-none">
+                   {{ item.week }}<br/>{{ item.amount }} ({{ ((item.amount / data!.procurementData.totalProcurement) * 100).toFixed(1) }}%)
+                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Procurement Data Section -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <!-- Weekly Totals Card -->
+          <div class="dashboard-card rounded-xl shadow-xl border-none bg-white p-6">
+            <h3 class="text-lg font-black text-slate-900 mb-4">ปริมาณการซื้อ/จ้างรายสัปดาห์</h3>
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div v-for="item in data?.procurementData.weeklyTotals" :key="item.week" class="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                <p class="text-xs font-bold text-slate-500 uppercase">{{ item.week }}</p>
+                <p class="text-2xl font-black text-sky-700">{{ item.amount }}</p>
+              </div>
+            </div>
+            <div class="mt-4 pt-4 border-t border-slate-100 text-right">
+              <p class="text-sm font-bold text-slate-500">รวมทั้งหมด: <span class="text-xl font-black text-slate-950">{{ data?.procurementData.totalProcurement }}</span></p>
+            </div>
+          </div>
+          
+          <!-- Status Summary Card -->
+          <div class="dashboard-card rounded-xl shadow-xl border-none bg-white p-6">
+            <h3 class="text-lg font-black text-slate-900 mb-6 text-center">สถานะงานซื้อจ้าง</h3>
+            <div class="flex items-end justify-between h-64 gap-2 pt-10">
+              <div v-for="item in data?.procurementData.statusSummary" :key="item.status" class="flex flex-col items-center flex-1 group">
+                <div class="relative w-full flex justify-center items-end bg-slate-100 rounded-t-sm h-full">
+                   <!-- Bar with color based on status -->
+                   <div class="w-full transition-all duration-500" :style="{ height: `${(item.count / Math.max(...data!.procurementData.statusSummary.map(s => s.count), 1)) * 100}%`, backgroundColor: getStatusColor(item.status) }"></div>
+                   <!-- Value Label on top of bar -->
+                   <span class="absolute -top-6 text-xs font-black" :style="{ color: getStatusColor(item.status) }">{{ item.count }}</span>
+                </div>
+                <span class="text-[10px] font-bold text-slate-600 mt-2 text-center rotate-45 origin-top-left whitespace-nowrap">{{ item.status }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="dashboard-card rounded-xl shadow-xl overflow-hidden border-none bg-white">
         <div class="p-6">
           <div class="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -612,43 +703,34 @@ async function applyFilters() {
             <table class="table table-md table-pin-rows min-w-[1000px] border-collapse">
               <thead>
                 <tr class="bg-slate-50/80 backdrop-blur-sm">
-                  <th class="w-[120px] py-4 px-4 text-[11px] font-black uppercase tracking-widest text-slate-500 border-none">ECM</th>
-                  <th class="w-[120px] py-4 px-2 text-[11px] font-black uppercase tracking-widest text-slate-500 border-none">W/O</th>
-                  <th class="w-[320px] py-4 px-2 text-[11px] font-black uppercase tracking-widest text-slate-500 border-none">รายละเอียดงาน</th>
-                  <th class="w-[200px] py-4 px-2 text-[11px] font-black uppercase tracking-widest text-slate-500 border-none">Equipment Group</th>
-                  <th class="w-[120px] py-4 px-2 text-[11px] font-black uppercase tracking-widest text-slate-500 border-none text-center">วันที่</th>
-                  <th class="w-[140px] py-4 px-4 text-[11px] font-black uppercase tracking-widest text-slate-500 border-none text-center">สถานะ</th>
+                  <th class="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-slate-500 border-none">ECM ซื้อจ้าง</th>
+                  <th class="py-4 px-2 text-[10px] font-black uppercase tracking-widest text-slate-500 border-none">ECM</th>
+                  <th class="py-4 px-2 text-[10px] font-black uppercase tracking-widest text-slate-500 border-none">W/O</th>
+                  <th class="py-4 px-2 text-[10px] font-black uppercase tracking-widest text-slate-500 border-none">รายการ</th>
+                  <th class="py-4 px-2 text-[10px] font-black uppercase tracking-widest text-slate-500 border-none">Equip</th>
+                  <th class="py-4 px-2 text-[10px] font-black uppercase tracking-widest text-slate-500 border-none">Date เข้า</th>
+                  <th class="py-4 px-2 text-[10px] font-black uppercase tracking-widest text-slate-500 border-none">Date เริ่มงาน</th>
+                  <th class="py-4 px-2 text-[10px] font-black uppercase tracking-widest text-slate-500 border-none">Date ออกงาน</th>
+                  <th class="py-4 px-2 text-[10px] font-black uppercase tracking-widest text-slate-500 border-none">สถานะ</th>
+                  <th class="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-slate-500 border-none">การดำเนินการ</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-50">
-                <tr v-if="filteredProjects.length === 0">
-                  <td colspan="6" class="py-20 text-center">
-                    <div class="flex flex-col items-center gap-2">
-                      <div class="p-4 bg-slate-100 rounded-full text-slate-400">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                      </div>
-                      <p class="text-lg font-bold text-slate-400">ไม่พบข้อมูลที่ค้นหา</p>
-                      <button @click="searchTerm = ''" class="btn btn-ghost btn-xs text-sky-600">ล้างการค้นหา</button>
-                    </div>
-                  </td>
-                </tr>
                 <tr v-for="project in filteredProjects" :key="project.id" class="hover:bg-sky-50/50 transition-colors group">
-                  <td class="px-4 py-4 font-black text-sky-700">{{ project.ecm }}</td>
-                  <td class="px-2 py-4 font-bold text-slate-900 tracking-tight">{{ project.order }}</td>
-                  <td class="px-2 py-4">
-                    <p class="text-[13px] font-bold text-slate-800 leading-snug group-hover:text-sky-900 transition-colors">{{ project.name }}</p>
-                    <p class="text-[10px] font-semibold text-slate-400 mt-1 uppercase tracking-tight">{{ project.department }}</p>
-                  </td>
+                  <td class="px-4 py-4 font-black text-sky-700 text-[12px]">{{ project.ecmProcurement }}</td>
+                  <td class="px-2 py-4 font-black text-sky-700 text-[12px]">{{ project.ecm }}</td>
+                  <td class="px-2 py-4 font-bold text-slate-900 tracking-tight text-[12px]">{{ project.order }}</td>
+                  <td class="px-2 py-4 text-[12px] font-bold text-slate-800">{{ project.name }}</td>
                   <td class="px-2 py-4 text-[12px] font-bold text-slate-600">{{ project.equipGroup }}</td>
                   <td class="px-2 py-4 text-[12px] font-bold text-slate-600 text-center">{{ project.date }}</td>
-                  <td class="px-4 py-4 text-center">
-                    <span 
-                      class="inline-flex items-center justify-center px-3 py-1.5 rounded-full text-[11px] font-black tracking-tight leading-none min-w-[80px]" 
-                      :class="statusBadge(project.status)"
-                    >
+                  <td class="px-2 py-4 text-[12px] font-bold text-slate-600 text-center">{{ project.startDate }}</td>
+                  <td class="px-2 py-4 text-[12px] font-bold text-slate-600 text-center">{{ project.endDate }}</td>
+                  <td class="px-2 py-4 text-center">
+                    <span class="inline-flex items-center justify-center px-2 py-1 rounded-full text-[10px] font-black tracking-tight leading-none" :class="statusBadge(project.status)">
                       {{ project.status }}
                     </span>
                   </td>
+                  <td class="px-4 py-4 text-[12px] font-bold text-slate-700">{{ project.action }}</td>
                 </tr>
               </tbody>
             </table>
