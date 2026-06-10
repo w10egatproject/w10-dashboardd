@@ -485,6 +485,14 @@ async function applyFilters() {
               </div>
             </div>
           </div>
+          
+          <div class="flex justify-center mt-6 p-4 bg-slate-900 rounded-2xl">
+             <span class="text-sm font-black text-white px-8 py-2">
+                  รวม W/O ทั้งหมด: {{ data?.statusData.totalWorkOrders || 0 }}
+             </span>
+          </div>
+        </div>
+      </section>
 
           <!-- Removed Gauge Section from here -->
         </div>
