@@ -496,45 +496,6 @@ async function applyFilters() {
       </section>
 
       <!-- New Dedicated Gauge Section -->
-      <section class="mt-4">
-        <div class="dashboard-card rounded-xl p-6 bg-white border border-slate-200 shadow-sm">
-          <h2 class="text-xl font-extrabold text-slate-900 mb-6 flex items-center gap-2 border-b border-slate-100 pb-3">
-            <div class="w-1.5 h-6 bg-indigo-600 rounded-full"></div>
-            LOAD FACTOR / MAN
-          </h2>
-          
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div v-for="week in weeks" :key="`gauge-container-${week}`" class="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 shadow-sm space-y-4">
-              <p class="text-base font-black text-slate-900 border-b border-slate-200 pb-2">{{ week }}</p>
-
-              <!-- MAN -->
-              <div class="flex flex-col items-center">
-                <p class="text-[10px] font-black text-slate-500 mb-2 uppercase tracking-wider">MAN</p>
-                <div class="flex gap-2">
-                   <GaugeChart :value="data?.wGauges[week]?.empNorm || 0" label="Emp" class="scale-90" />
-                   <GaugeChart :value="data?.wGauges[week]?.conNorm || 0" label="Con" class="scale-90" />
-                </div>
-              </div>
-
-              <!-- LOAD FACTOR -->
-              <div class="flex flex-col items-center">
-                <p class="text-[10px] font-black text-slate-500 mb-2 uppercase tracking-wider">LOAD FACTOR</p>
-                <div class="flex gap-2">
-                   <GaugeChart :value="data?.wGauges[week]?.empOT || 0" label="Emp OT" class="scale-90" />
-                   <GaugeChart :value="data?.wGauges[week]?.conOT || 0" label="Con OT" class="scale-90" />
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <div class="flex justify-center mt-6 p-4 bg-slate-900 rounded-2xl">
-             <span class="text-sm font-black text-white px-8 py-2">
-                  รวม W/O ทั้งหมด: {{ data?.statusData.totalWorkOrders || 0 }}
-             </span>
-          </div>
-        </div>
-      </section>
-
       <section class="mt-4 grid gap-4 xl:grid-cols-2">
         <!-- Card 1: Bar Chart -->
         <div class="dashboard-card rounded-xl p-5 sm:p-6 shadow-lg bg-white border-none relative overflow-hidden flex flex-col h-full">
@@ -631,6 +592,46 @@ async function applyFilters() {
             <div class="mt-4 pt-4 border-t border-slate-50 text-right">
               <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Groups: {{ equipmentItems.length }}</p>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- New Dedicated Gauge Section -->
+      <section class="mt-4">
+        <div class="dashboard-card rounded-xl p-6 bg-white border border-slate-200 shadow-sm">
+          <h2 class="text-xl font-extrabold text-slate-900 mb-6 flex items-center gap-2 border-b border-slate-100 pb-3">
+            <div class="w-1.5 h-6 bg-indigo-600 rounded-full"></div>
+            LOAD FACTOR / MAN
+          </h2>
+          
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div v-for="week in weeks" :key="`gauge-container-${week}`" class="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+              <p class="text-base font-black text-slate-900 border-b border-slate-200 pb-2">{{ week }}</p>
+
+              <!-- MAN -->
+              <div class="flex flex-col items-center">
+                <p class="text-[10px] font-black text-slate-500 mb-2 uppercase tracking-wider">MAN</p>
+                <div class="flex gap-2">
+                   <GaugeChart :value="data?.wGauges[week]?.empNorm || 0" label="Emp" class="scale-90" />
+                   <GaugeChart :value="data?.wGauges[week]?.conNorm || 0" label="Con" class="scale-90" />
+                </div>
+              </div>
+
+              <!-- LOAD FACTOR -->
+              <div class="flex flex-col items-center">
+                <p class="text-[10px] font-black text-slate-500 mb-2 uppercase tracking-wider">LOAD FACTOR</p>
+                <div class="flex gap-2">
+                   <GaugeChart :value="data?.wGauges[week]?.empOT || 0" label="Emp OT" class="scale-90" />
+                   <GaugeChart :value="data?.wGauges[week]?.conOT || 0" label="Con OT" class="scale-90" />
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="flex justify-center mt-6 p-4 bg-slate-900 rounded-2xl">
+             <span class="text-sm font-black text-white px-8 py-2">
+                  รวม W/O ทั้งหมด: {{ data?.statusData.totalWorkOrders || 0 }}
+             </span>
           </div>
         </div>
       </section>
