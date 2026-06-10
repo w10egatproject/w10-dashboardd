@@ -330,7 +330,7 @@ async function applyFilters() {
             </div>
           </div>
         </div>
-
+      
       <div v-if="pending && !data" class="mb-6 rounded-xl border border-sky-200 bg-sky-50 px-5 py-4 text-sm font-bold text-sky-800 flex items-center gap-3 animate-pulse">
         <div class="w-4 h-4 border-2 border-sky-800 border-t-transparent rounded-full animate-spin"></div>
         กำลังอ่านข้อมูลจาก Google Sheet...
@@ -399,9 +399,7 @@ async function applyFilters() {
           </div>
         </div>
       </section>
-      </template>
-      </template>
-
+      
       <div v-if="error" class="alert alert-error mb-6 rounded-xl shadow-md border-none text-white font-bold">
         <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
         <span>โหลดข้อมูลไม่สำเร็จ: {{ error.message }}</span>
@@ -496,11 +494,6 @@ async function applyFilters() {
         </div>
       </section>
 
-          <!-- Removed Gauge Section from here -->
-        </div>
-      </section>
-
-      <!-- New Dedicated Gauge Section -->
       <section class="mt-4 grid gap-4 xl:grid-cols-2">
         <!-- Card 1: Bar Chart -->
         <div class="dashboard-card rounded-xl p-5 sm:p-6 shadow-lg bg-white border-none relative overflow-hidden flex flex-col h-full">
