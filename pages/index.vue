@@ -677,9 +677,9 @@ async function applyFilters() {
           <!-- Status Summary Card -->
           <div class="dashboard-card rounded-xl shadow-xl border-none bg-white p-6">
             <h3 class="text-lg font-black text-slate-900 mb-6 text-center">สถานะงานซื้อจ้าง</h3>
-            <div class="flex items-end justify-between h-64 gap-2 pt-10">
-              <div v-for="item in data?.procurementData.statusSummary" :key="item.status" class="flex flex-col items-center flex-1 group">
-                <div class="relative w-full flex justify-center items-end bg-slate-100 rounded-t-sm h-full">
+            <div class="flex items-end justify-between h-48 gap-2 pt-10">
+              <div v-for="item in data?.procurementData.statusSummary" :key="item.status" class="flex flex-col items-center flex-1 group h-full">
+                <div class="relative w-8 flex justify-center items-end bg-slate-100 rounded-t-sm h-full">
                    <!-- Bar with color based on status -->
                    <div class="w-full transition-all duration-500" :style="{ height: `${(item.count / Math.max(...data!.procurementData.statusSummary.map(s => s.count), 1)) * 100}%`, backgroundColor: getStatusColor(item.status) }"></div>
                    <!-- Value Label on top of bar -->
