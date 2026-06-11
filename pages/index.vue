@@ -664,7 +664,7 @@ async function applyFilters() {
           <div class="dashboard-card rounded-xl shadow-xl border-none bg-white p-6">
             <h3 class="text-lg font-black text-slate-900 mb-4">ปริมาณการซื้อ/จ้างรายสัปดาห์</h3>
             <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <div v-for="item in [...data!.procurementData.weeklyTotals].reverse()" :key="item.week" class="bg-slate-50 p-4 rounded-xl border border-slate-100">
+              <div v-for="item in data?.procurementData.weeklyTotals" :key="item.week" class="bg-slate-50 p-4 rounded-xl border border-slate-100">
                 <p class="text-xs font-bold text-slate-500 uppercase">{{ item.week }}</p>
                 <p class="text-2xl font-black text-sky-700">{{ item.amount }}</p>
               </div>
