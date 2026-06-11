@@ -541,6 +541,14 @@ async function applyFilters() {
                           backgroundColor: equipmentColor(itemIndex),
                         }"
                       >
+                        <!-- Numerical label visible on top of bar -->
+                        <span 
+                          v-if="(item.values[weekIndex] || 0) > 0"
+                          class="absolute -top-5 left-0 w-full text-center text-[9px] font-black text-slate-700"
+                        >
+                          {{ item.values[weekIndex] }}
+                        </span>
+                        
                         <div class="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover/barsm:opacity-100 transition-all bg-slate-900 text-white px-1.5 py-1 rounded text-[9px] font-bold z-30 shadow-lg whitespace-nowrap pointer-events-none">
                           {{ item.name }}: {{ item.values[weekIndex] }}
                         </div>
