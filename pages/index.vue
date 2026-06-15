@@ -173,6 +173,51 @@ const otGroups = computed(() => {
 });
 const maxWeekEntrance = computed(() => Math.max(...weeks.map(week => data.value?.groupStats[week].entrance || 0), 1));
 const maxEquipmentWeekValue = computed(() => Math.max(...equipmentItems.value.flatMap(item => item.values || []), 1));
+const equipmentChartOptions = computed((): Highcharts.Options => {
+  return {
+    accessibility: { enabled: false }, // Disable accessibility module to remove warning
+    chart: {
+      type: 'column',
+      height: 250,
+      backgroundColor: 'transparent'
+    },
+    title: { text: '' },
+    credits: { enabled: false },
+    xAxis: {
+      categories: weeks,
+      labels: {
+        style: {
+          fontSize: '10px',
+          fontWeight: 'bold',
+          color: '#334155'
+        }
+      }
+    },
+    yAxis: {
+      title: { text: '' },
+      gridLineDashStyle: 'Dash',
+      labels: {
+        style: {
+          fontSize: '9px',
+          fontWeight: 'bold',
+          color: '#334155'
+        }
+      }
+    },
+    plotOptions: {
+      column: {
+        borderRadius: 2,
+        groupPadding: 0.1,
+      }
+    },
+    series: equipmentItems.value.map((item, index) => ({
+      type: 'column',
+      name: item.name,
+      data: item.values,
+      color: equipmentColors[index % equipmentColors.length]
+    }))
+  };
+});
 const equipmentColors = ['#0284c7', '#ef4444', '#f59e0b', '#16a34a', '#6366f1', '#14b8a6', '#64748b'];
 const lastUpdated = computed(() => {
   if (!data.value?.timestamp) return '-';
@@ -614,53 +659,7 @@ async function applyFilters() {
             </div>
           </div>
 
-          <!-- Compact Chart Area -->
-          <div class="relative flex-1 rounded-xl bg-slate-50/30 p-4 border border-slate-100">
-            <div class="h-[280px] flex flex-col relative">
-              <div class="absolute inset-0 flex flex-col justify-between pointer-events-none">
-                <div v-for="i in 5" :key="`grid-sm-${i}`" class="w-full border-t border-slate-200/50 border-dashed relative">
-                  <span class="absolute -left-7 -top-2 text-[9px] font-bold text-slate-400 w-6 text-right">
-                    {{ Math.round((maxEquipmentWeekValue / 4) * (5 - i)) }}
-                  </span>
-                </div>
-              </div>
-
-              <div class="flex-1 flex items-end justify-between gap-3 pt-4 pb-1 relative z-10 px-2">
-                <div v-for="(week, weekIndex) in weeks" :key="`chart-sm-week-${week}`" class="flex-1 flex flex-col h-full">
-                  <div class="flex-1 flex items-end justify-center gap-0.5 lg:gap-1">
-                    <div
-                      v-for="(item, itemIndex) in equipmentItems"
-                      :key="`bar-sm-${week}-${item.name}`"
-                      class="relative flex-1 flex flex-col justify-end h-full max-w-[14px]"
-                    >
-                      <div
-                        class="w-full rounded-t-[1px] transition-all duration-700 shadow-sm hover:brightness-110 cursor-pointer group/barsm"
-                        :style="{
-                          height: equipmentWeekBarHeight(item.values[weekIndex] || 0),
-                          backgroundColor: equipmentColor(itemIndex),
-                        }"
-                      >
-                        <!-- Numerical label visible on top of bar -->
-                        <span 
-                          v-if="(item.values[weekIndex] || 0) > 0"
-                          class="absolute -top-5 left-0 w-full text-center text-[9px] font-black text-slate-700"
-                        >
-                          {{ item.values[weekIndex] }}
-                        </span>
-                        
-                        <div class="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover/barsm:opacity-100 transition-all bg-slate-900 text-white px-1.5 py-1 rounded text-[9px] font-bold z-30 shadow-lg whitespace-nowrap pointer-events-none">
-                          {{ item.name }}: {{ item.values[weekIndex] }}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="mt-2 pt-2 border-t border-slate-200 text-center">
-                    <span class="text-[9px] font-black text-slate-500 uppercase tracking-tighter">{{ week }}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+          <HighchartsBarChart :options="equipmentChartOptions" class="h-full" />
         </div>
 
         <!-- Card 2: Data Table -->
