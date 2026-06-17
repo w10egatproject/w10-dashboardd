@@ -25,8 +25,9 @@ function getSheetsClient() {
   };
 }
 
-const OT_SPREADSHEET_ID = process.env.GOOGLE_OT_SHEET_ID || '1ucCTBZBLF8tkTWyuIE46_aRx0vUwen382wWokuR55UQ';
-const OT_SHEET_ID = Number(process.env.GOOGLE_OT_SHEET_ID_NUM || 2120946153);
+const OT_CONTRACTOR_SPREADSHEET_ID = process.env.GOOGLE_OT_CONTRACTOR_SHEET_ID || process.env.GOOGLE_OT_SHEET_ID || '1ucCTBZBLF8tkTWyuIE46_aRx0vUwen382wWokuR55UQ';
+const OT_EMPLOYEE_SPREADSHEET_ID = process.env.GOOGLE_OT_EMPLOYEE_SHEET_ID || '';
+const OT_CONTRACTOR_SHEET_ID = Number(process.env.GOOGLE_OT_CONTRACTOR_SHEET_ID_NUM || process.env.GOOGLE_OT_SHEET_ID_NUM || 2120946153);
 
 async function getSheetTitleById(client: ReturnType<typeof getSheetsClient>, spreadsheetId: string, sheetId: number) {
   const metadata = await client.sheets.spreadsheets.get({
@@ -37,15 +38,31 @@ async function getSheetTitleById(client: ReturnType<typeof getSheetsClient>, spr
   return sheet?.properties?.title || '';
 }
 
+async function getSummarySheetTitle(client: ReturnType<typeof getSheetsClient>, spreadsheetId: string) {
+  const explicitTitle = process.env.GOOGLE_OT_EMPLOYEE_SHEET_TITLE;
+  if (explicitTitle) return explicitTitle;
+
+  const metadata = await client.sheets.spreadsheets.get({
+    spreadsheetId,
+    fields: 'sheets(properties(title,index))',
+  });
+  const sheets = metadata.data.sheets?.sort((a, b) => (a.properties?.index || 0) - (b.properties?.index || 0)) || [];
+  const summarySheet = sheets.find(item => item.properties?.title?.includes('สรุป'));
+  return summarySheet?.properties?.title || sheets[0]?.properties?.title || '';
+}
+
 function quoteSheetName(sheetName: string) {
   return `'${sheetName.replace(/'/g, "''")}'`;
 }
 
 export async function getRawDashboardSheets() {
   const client = getSheetsClient();
-  const otSummaryTitle = await getSheetTitleById(client, OT_SPREADSHEET_ID, OT_SHEET_ID);
+  const [otContractorSummaryTitle, otEmployeeSummaryTitle] = await Promise.all([
+    getSheetTitleById(client, OT_CONTRACTOR_SPREADSHEET_ID, OT_CONTRACTOR_SHEET_ID),
+    OT_EMPLOYEE_SPREADSHEET_ID ? getSummarySheetTitle(client, OT_EMPLOYEE_SPREADSHEET_ID) : Promise.resolve(''),
+  ]);
 
-  const [dashboardRes, infoRes, otSummaryRes, otCheckErrorRes] = await Promise.all([
+  const [dashboardRes, infoRes, otSummaryRes, otEmployeeSummaryRes, otCheckErrorRes, otEmployeeCheckErrorRes] = await Promise.all([
     client.sheets.spreadsheets.values.get({
       spreadsheetId: client.sheetId,
       range: "'Dashboard W10 All'!A1:CZ1000",
@@ -55,20 +72,30 @@ export async function getRawDashboardSheets() {
       range: "'Dashboard W10 All info'!A1:CZ5000",
     }),
     client.sheets.spreadsheets.values.get({
-      spreadsheetId: OT_SPREADSHEET_ID,
-      range: `${quoteSheetName(otSummaryTitle)}!A1:AP1000`,
+      spreadsheetId: OT_CONTRACTOR_SPREADSHEET_ID,
+      range: `${quoteSheetName(otContractorSummaryTitle)}!A1:AP1000`,
     }),
+    OT_EMPLOYEE_SPREADSHEET_ID && otEmployeeSummaryTitle ? client.sheets.spreadsheets.values.get({
+      spreadsheetId: OT_EMPLOYEE_SPREADSHEET_ID,
+      range: `${quoteSheetName(otEmployeeSummaryTitle)}!A1:AP1000`,
+    }) : Promise.resolve({ data: { values: [] } }),
     client.sheets.spreadsheets.values.get({
-      spreadsheetId: OT_SPREADSHEET_ID,
+      spreadsheetId: OT_CONTRACTOR_SPREADSHEET_ID,
       range: `${quoteSheetName(process.env.GOOGLE_OT_CHECK_ERROR_SHEET_TITLE || 'Check OT Error')}!A1:AP1000`,
     }),
+    OT_EMPLOYEE_SPREADSHEET_ID ? client.sheets.spreadsheets.values.get({
+      spreadsheetId: OT_EMPLOYEE_SPREADSHEET_ID,
+      range: `${quoteSheetName(process.env.GOOGLE_OT_EMPLOYEE_CHECK_ERROR_SHEET_TITLE || 'Check OT Error')}!A1:AP1000`,
+    }) : Promise.resolve({ data: { values: [] } }),
   ]);
 
   return {
     dashboard: dashboardRes.data.values || [],
     info: infoRes.data.values || [],
     otSummary: otSummaryRes.data.values || [],
+    otEmployeeSummary: otEmployeeSummaryRes.data.values || [],
     otCheckError: otCheckErrorRes.data.values || [],
+    otEmployeeCheckError: otEmployeeCheckErrorRes.data.values || [],
   };
 }
 

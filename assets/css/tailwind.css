@@ -181,3 +181,173 @@ input,
 .ot-check-table tbody .ot-check-name-cell {
   font-size: clamp(7px, 0.58vw, 9px);
 }
+
+.contractor-ot-panel {
+  color: #020617;
+}
+
+.contractor-ot-header {
+  background: rgba(255, 247, 251, 0.92);
+}
+
+.contractor-detail-table,
+.contractor-scan-table,
+.contractor-error-table {
+  table-layout: fixed;
+  font-size: clamp(7px, 0.58vw, 10px);
+  line-height: 1.08;
+}
+
+.contractor-detail-table th,
+.contractor-detail-table td,
+.contractor-scan-table th,
+.contractor-scan-table td,
+.contractor-error-table th,
+.contractor-error-table td {
+  height: 24px;
+  padding: 2px 3px !important;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+}
+
+.contractor-col-seq {
+  width: 3.2%;
+}
+
+.contractor-col-group {
+  width: 4.2%;
+}
+
+.contractor-col-name {
+  width: 15.6%;
+}
+
+.contractor-col-day {
+  width: 1.85%;
+}
+
+.contractor-col-summary {
+  width: 4%;
+}
+
+.contractor-col-money {
+  width: 4.4%;
+}
+
+.contractor-scan-name {
+  width: 16.8%;
+}
+
+.contractor-scan-day {
+  width: 2.1%;
+}
+
+.contractor-scan-total {
+  width: 5.2%;
+}
+
+.contractor-error-name {
+  width: 16.8%;
+}
+
+.contractor-error-day {
+  width: 2.15%;
+}
+
+.contractor-error-total {
+  width: 5.2%;
+}
+
+.contractor-detail-table td:nth-child(3),
+.contractor-scan-table td:nth-child(2),
+.contractor-error-table td:nth-child(2) {
+  white-space: normal;
+  line-height: 1.18;
+  word-break: keep-all;
+}
+
+.employee-ot-panel {
+  color: #020617;
+}
+
+.employee-ot-header {
+  background: rgba(255, 252, 235, 0.94);
+}
+
+.employee-detail-table,
+.employee-scan-table,
+.employee-error-table {
+  table-layout: fixed;
+  font-size: clamp(7px, 0.58vw, 10px);
+  line-height: 1.08;
+}
+
+.employee-detail-table th,
+.employee-detail-table td,
+.employee-scan-table th,
+.employee-scan-table td,
+.employee-error-table th,
+.employee-error-table td {
+  height: 24px;
+  padding: 2px 3px !important;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+}
+
+.employee-col-seq {
+  width: 3.6%;
+}
+
+.employee-col-id {
+  width: 5.8%;
+}
+
+.employee-col-name {
+  width: 14.2%;
+}
+
+.employee-col-position {
+  width: 4.4%;
+}
+
+.employee-col-day {
+  width: 1.85%;
+}
+
+.employee-col-total {
+  width: 4%;
+}
+
+.employee-scan-name {
+  width: 16%;
+}
+
+.employee-scan-day {
+  width: 2.05%;
+}
+
+.employee-scan-total {
+  width: 5.2%;
+}
+
+.employee-error-name {
+  width: 15.8%;
+}
+
+.employee-error-day {
+  width: 2.05%;
+}
+
+.employee-error-total {
+  width: 5.2%;
+}
+
+.employee-detail-table td:nth-child(3),
+.employee-scan-table td:nth-child(2),
+.employee-error-table td:nth-child(2) {
+  white-space: normal;
+  line-height: 1.18;
+  word-break: keep-all;
+}

@@ -173,6 +173,112 @@ function buildOTSummary(otRows: SheetRows) {
   };
 }
 
+function employeeGroupFromIndex(index: number) {
+  if (index < 6) return 'W11';
+  if (index < 10) return 'W12';
+  if (index < 13) return 'W13';
+  return 'W14';
+}
+
+function compactNumberText(value: unknown) {
+  const raw = text(value);
+  return raw.replace(/\.0$/, '') || '-';
+}
+
+function buildEmployeeOTSummary(otRows: SheetRows) {
+  const headerRow = otRows[2] || [];
+  const days = Array.from({ length: 31 }, (_, index) => text(headerRow[index + 5]) || String(index + 1));
+  const bodyRows = otRows.slice(3).filter(row => text(row[1]) && text(row[2]) && text(row[3]));
+
+  const rows = bodyRows.map((row, index) => {
+    const regularTotal = compactNumberText(row[36]);
+    const threeTimesTotal = compactNumberText(row[37]);
+
+    return {
+      id: `EMP-OT-${text(row[2]) || index}-${text(row[3]) || index}`,
+      sequence: text(row[1]),
+      group: employeeGroupFromIndex(index),
+      employeeId: text(row[2]),
+      name: text(row[3]),
+      position: text(row[4]),
+      days: days.map((_, dayIndex) => compactNumberText(row[dayIndex + 5])),
+      holidayHours: regularTotal,
+      totalOnePointFiveHours: threeTimesTotal,
+      oneTimesAmount: '0',
+      onePointFiveAmount: '0',
+      totalPay: regularTotal,
+      threeTimesAmount: threeTimesTotal,
+      regularTotal,
+      threeTimesTotal,
+    };
+  });
+
+  const regularTotal = rows.reduce((sum, row) => sum + numericText(row.regularTotal), 0);
+  const threeTimesTotal = rows.reduce((sum, row) => sum + numericText(row.threeTimesTotal), 0);
+
+  return {
+    title: text(otRows[1]?.[2]) || 'ตารางสรุป OT พนักงาน',
+    days,
+    summaryHeaders: {
+      holidayHours: 'รวม',
+      totalOnePointFiveHours: 'รวมx3',
+      oneTimesAmount: '1เท่า',
+      onePointFiveAmount: '1.5เท่า',
+      totalPay: 'ยอดจ่าย',
+      threeTimesAmount: '3เท่า',
+    },
+    rateLabels: {
+      oneTimes: '',
+      onePointFive: '',
+      totalPay: 'รวม',
+      threeTimes: 'รวมx3',
+    },
+    rows,
+    totals: {
+      label: 'ยอดรวมสุทธิ',
+      holidayHours: String(regularTotal),
+      totalOnePointFiveHours: String(threeTimesTotal),
+      oneTimesAmount: '0',
+      onePointFiveAmount: '0',
+      totalPay: String(regularTotal),
+      threeTimesAmount: String(threeTimesTotal),
+    },
+  };
+}
+
+function numericText(value: unknown) {
+  return parseFloat(String(value ?? '').replace(/,/g, '')) || 0;
+}
+
+function buildEmployeeOTCheckError(checkRows: SheetRows) {
+  const headerRow = checkRows[2] || [];
+  const days = Array.from({ length: 31 }, (_, index) => text(headerRow[index + 5]) || String(index + 1));
+  const rows = checkRows
+    .slice(3)
+    .filter(row => text(row[1]) && text(row[2]) && text(row[3]))
+    .map((row, index) => {
+      const checks = days.map((_, dayIndex) => text(row[dayIndex + 5]).toUpperCase() !== 'FALSE');
+      const errorCount = compactNumberText(row[36]) || String(checks.filter(value => !value).length);
+
+      return {
+        id: `EMP-OT-CHECK-${text(row[1]) || index}-${text(row[2]) || index}`,
+        sequence: text(row[1]),
+        employeeId: text(row[2]),
+        name: text(row[3]),
+        position: text(row[4]),
+        group: employeeGroupFromIndex(index),
+        checks,
+        errorCount,
+      };
+    });
+
+  return {
+    title: 'CHECK OT ERROR พนักงาน',
+    days,
+    rows,
+  };
+}
+
 function buildOTCheckError(checkRows: SheetRows, summaryRows: ReturnType<typeof buildOTSummary>['rows']) {
   const headerRow = checkRows[2] || [];
   const days = Array.from({ length: 31 }, (_, index) => text(headerRow[index + 4]) || String(index + 1));
@@ -227,13 +333,14 @@ function buildProcurementData(infoRows: SheetRows) {
   return { statusSummary, weeklyTotals, totalProcurement };
 }
 
-export function normalizeDashboard(rawSheets: { dashboard: SheetRows; info: SheetRows; otSummary?: SheetRows; otCheckError?: SheetRows }, filters: { year?: string; month?: string } = {}) {
+export function normalizeDashboard(rawSheets: { dashboard: SheetRows; info: SheetRows; otSummary?: SheetRows; otEmployeeSummary?: SheetRows; otCheckError?: SheetRows; otEmployeeCheckError?: SheetRows }, filters: { year?: string; month?: string } = {}) {
   const infoRows = rawSheets.info || [];
   const { projects, weeklyProjects } = buildProjects(infoRows);
   const groupStats = buildGroupStats(infoRows, weeklyProjects);
   const statusData = buildStatusData(infoRows);
   const procurementData = buildProcurementData(infoRows);
   const otSummary = buildOTSummary(rawSheets.otSummary || []);
+  const otEmployeeSummary = buildEmployeeOTSummary(rawSheets.otEmployeeSummary || []);
   const sheetYearRaw = text(infoRows[1]?.[2]) || '2025';
   const sheetMonthRaw = text(infoRows[2]?.[2]) || 'all';
 
@@ -245,7 +352,9 @@ export function normalizeDashboard(rawSheets: { dashboard: SheetRows; info: Shee
     statusSummary: { total: { entrance: groupStats.W_all.entrance } },
     groupStats,
     wGauges: buildWGauges(infoRows),
+    otEmployeeSummary,
     otSummary,
+    otEmployeeCheckError: buildEmployeeOTCheckError(rawSheets.otEmployeeCheckError || []),
     otCheckError: buildOTCheckError(rawSheets.otCheckError || [], otSummary.rows),
     w_all: { entrance: groupStats.W_all.entrance },
     statusData,
@@ -256,6 +365,8 @@ export function normalizeDashboard(rawSheets: { dashboard: SheetRows; info: Shee
     debugInfo: {
       dashboardRows: rawSheets.dashboard?.length || 0,
       infoRows: infoRows.length,
+      otEmployeeSummaryRows: rawSheets.otEmployeeSummary?.length || 0,
+      otEmployeeCheckErrorRows: rawSheets.otEmployeeCheckError?.length || 0,
       otSummaryRows: rawSheets.otSummary?.length || 0,
       otCheckErrorRows: rawSheets.otCheckError?.length || 0,
     },
