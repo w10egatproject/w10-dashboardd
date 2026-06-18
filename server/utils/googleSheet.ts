@@ -26,7 +26,7 @@ function getSheetsClient() {
 }
 
 const OT_CONTRACTOR_SPREADSHEET_ID = process.env.GOOGLE_OT_CONTRACTOR_SHEET_ID || process.env.GOOGLE_OT_SHEET_ID || '1ucCTBZBLF8tkTWyuIE46_aRx0vUwen382wWokuR55UQ';
-const OT_EMPLOYEE_SPREADSHEET_ID = process.env.GOOGLE_OT_EMPLOYEE_SHEET_ID || '';
+const OT_EMPLOYEE_SPREADSHEET_ID = process.env.GOOGLE_OT_EMPLOYEE_SHEET_ID || '1__JtmwYd3xmL6XL-VkEU1E53NyaySwcT7dQY3OQ4aCA';
 const OT_CONTRACTOR_SHEET_ID = Number(process.env.GOOGLE_OT_CONTRACTOR_SHEET_ID_NUM || process.env.GOOGLE_OT_SHEET_ID_NUM || 2120946153);
 
 async function getSheetTitleById(client: ReturnType<typeof getSheetsClient>, spreadsheetId: string, sheetId: number) {
