@@ -1,14 +1,21 @@
 <template>
-  <div ref="chartContainer" class="w-full h-full" style="min-height: 250px;"></div>
+  <div
+    ref="chartContainer"
+    class="w-full"
+    :style="{ minHeight: `${minHeight}px` }"
+  ></div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue';
 import Highcharts from 'highcharts';
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   options: Highcharts.Options;
-}>();
+  minHeight?: number;
+}>(), {
+  minHeight: 250,
+});
 
 const chartContainer = ref<HTMLElement | null>(null);
 let chart: Highcharts.Chart | null = null;

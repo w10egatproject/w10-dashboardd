@@ -263,6 +263,157 @@ const otGroups = computed(() => buildOTGroups(currentOTSummary.value, showOTChec
 const currentOTGroups = computed(() => otGroups.value);
 const maxWeekEntrance = computed(() => Math.max(...weeks.map(week => data.value?.groupStats[week].entrance || 0), 1));
 const maxEquipmentWeekValue = computed(() => Math.max(...equipmentItems.value.flatMap(item => item.values || []), 1));
+const procurementWeeklyTotals = computed(() => data.value?.procurementData.weeklyTotals || []);
+const procurementStatusSummary = computed(() => data.value?.procurementData.statusSummary || []);
+const currentProcurementTotal = computed(() =>
+  data.value?.procurementData.totalProcurement
+  || procurementWeeklyTotals.value.reduce((sum, item) => sum + item.amount, 0)
+);
+const procurementStatusTotal = computed(() =>
+  procurementStatusSummary.value.reduce((sum, item) => sum + item.count, 0)
+);
+const procurementWeekColors = ['#f6d96f', '#f5ad63', '#6fc7e8', '#72a8e8'];
+const procurementStatusColors = [
+  '#e8c547', '#ed9143', '#4b9ce2', '#5ecb83',
+  '#9a83e5', '#df7db9', '#39bccd', '#ef858d',
+];
+const procurementWeeklyChartOptions = computed((): Highcharts.Options => ({
+  accessibility: { enabled: false },
+  chart: {
+    type: 'pie',
+    height: 300,
+    backgroundColor: 'transparent',
+    spacing: [8, 8, 8, 8],
+  },
+  title: {
+    text: currentProcurementTotal.value.toLocaleString('th-TH'),
+    align: 'center',
+    verticalAlign: 'middle',
+    y: 12,
+    style: {
+      color: '#0f172a',
+      fontFamily: 'Sarabun, Noto Sans Thai, Tahoma, sans-serif',
+      fontSize: '30px',
+      fontWeight: '800',
+    },
+  },
+  subtitle: {
+    text: 'รวมทั้งหมด',
+    align: 'center',
+    verticalAlign: 'middle',
+    y: 38,
+    style: {
+      color: '#64748b',
+      fontFamily: 'Sarabun, Noto Sans Thai, Tahoma, sans-serif',
+      fontSize: '11px',
+      fontWeight: '700',
+    },
+  },
+  credits: { enabled: false },
+  legend: { enabled: false },
+  tooltip: {
+    pointFormat: '<b>{point.y}</b> รายการ ({point.percentage:.1f}%)',
+  },
+  plotOptions: {
+    pie: {
+      animation: false,
+      innerSize: '58%',
+      size: '78%',
+      borderWidth: 3,
+      borderColor: '#eaf5fb',
+      dataLabels: {
+        enabled: true,
+        distance: 18,
+        connectorWidth: 1,
+        connectorColor: '#94a3b8',
+        format: '<b>{point.name}</b>: {point.percentage:.0f}%',
+        style: {
+          color: '#334155',
+          fontFamily: 'Sarabun, Noto Sans Thai, Tahoma, sans-serif',
+          fontSize: '10px',
+          fontWeight: '700',
+          textOutline: 'none',
+        },
+      },
+    },
+  },
+  series: [{
+    type: 'pie',
+    name: 'ปริมาณจัดซื้อจัดจ้าง',
+    data: procurementWeeklyTotals.value.map((item, index) => ({
+      name: item.week,
+      y: item.amount,
+      color: procurementWeekColors[index % procurementWeekColors.length],
+    })),
+  }],
+}));
+const procurementStatusChartOptions = computed((): Highcharts.Options => ({
+  accessibility: { enabled: false },
+  chart: {
+    type: 'column',
+    height: 300,
+    backgroundColor: 'transparent',
+    spacing: [12, 8, 4, 8],
+  },
+  title: { text: '' },
+  credits: { enabled: false },
+  legend: { enabled: false },
+  xAxis: {
+    categories: procurementStatusSummary.value.map(item => item.status),
+    lineColor: '#cbd5e1',
+    tickLength: 0,
+    labels: {
+      rotation: -24,
+      style: {
+        color: '#475569',
+        fontFamily: 'Sarabun, Noto Sans Thai, Tahoma, sans-serif',
+        fontSize: '9px',
+        fontWeight: '700',
+      },
+    },
+  },
+  yAxis: {
+    min: 0,
+    allowDecimals: false,
+    title: { text: '' },
+    gridLineColor: '#d7e3ef',
+    labels: {
+      style: {
+        color: '#64748b',
+        fontSize: '9px',
+      },
+    },
+  },
+  tooltip: {
+    pointFormat: '<b>{point.y}</b> รายการ',
+  },
+  plotOptions: {
+    column: {
+      animation: false,
+      borderWidth: 0,
+      borderRadius: 3,
+      maxPointWidth: 42,
+      minPointLength: 2,
+      dataLabels: {
+        enabled: true,
+        style: {
+          color: '#1e293b',
+          fontSize: '11px',
+          fontWeight: '800',
+          textOutline: 'none',
+        },
+      },
+    },
+  },
+  series: [{
+    type: 'column',
+    name: 'สถานะ',
+    data: procurementStatusSummary.value.map((item, index) => ({
+      y: item.count,
+      color: procurementStatusColors[index % procurementStatusColors.length],
+    })),
+  }],
+}));
 const equipmentChartOptions = computed((): Highcharts.Options => {
   return {
     accessibility: { enabled: false }, // Disable accessibility module to remove warning
@@ -406,54 +557,6 @@ function statusBadge(status: string) {
   if (lower.includes('sap')) 
     return 'bg-sky-50 text-sky-700 ring-1 ring-sky-600/20';
   return 'bg-slate-50 text-slate-600 ring-1 ring-slate-600/20';
-}
-
-function getProcurementColor(index: number) {
-  const colors = ['#3b82f6', '#f59e0b', '#10b981', '#ef4444'];
-  return colors[index % colors.length];
-}
-
-function getStatusColor(status: string) {
-  const colors: Record<string, string> = {
-    'ดำเนินการ': '#a855f7',
-    '1.รอซื้อจ้าง': '#991b1b',
-    '2.กบย-ช': '#3b82f6',
-    '3.หซ,หจ': '#a3e635',
-    '4.เสนอราคา': '#fb923c',
-    '5.ติดตามPO': '#4d7c0f',
-    '6.ส่งของ': '#3b82f6',
-    'เสร็จ': '#22c55e'
-  };
-  return colors[status] || '#64748b';
-}
-
-function getDonutPath(index: number, items: any[]) {
-  const total = items.reduce((acc, curr) => acc + curr.amount, 0);
-  let startAngle = 0;
-  for (let i = 0; i < index; i++) {
-    startAngle += (items[i].amount / total) * 360;
-  }
-  const endAngle = startAngle + (items[index].amount / total) * 360;
-
-  const x1 = 18 + 18 * Math.cos((startAngle - 90) * Math.PI / 180);
-  const y1 = 18 + 18 * Math.sin((startAngle - 90) * Math.PI / 180);
-  const x2 = 18 + 18 * Math.cos((endAngle - 90) * Math.PI / 180);
-  const y2 = 18 + 18 * Math.sin((endAngle - 90) * Math.PI / 180);
-
-  const largeArcFlag = endAngle - startAngle > 180 ? 1 : 0;
-
-  return `M 18 18 L ${x1} ${y1} A 18 18 0 ${largeArcFlag} 1 ${x2} ${y2} Z`;
-}
-
-function getLabelPosition(index: number, items: any[]) {
-  // Fixed positions based on the 4 possible sectors (top, right, bottom, left)
-  const positions = [
-    { top: '-20px', left: '110px' },  // Top
-    { top: '100px', left: '220px' },  // Right
-    { top: '220px', left: '110px' },  // Bottom
-    { top: '100px', left: '-20px' },  // Left
-  ];
-  return positions[index % positions.length];
 }
 
 async function applyFilters() {
@@ -835,70 +938,114 @@ async function applyFilters() {
 
       <template v-else-if="activeTab === 'report'">
       <section class="space-y-4">
-        <!-- Procurement Chart Card (MOVED TO TOP) -->
-        <div class="dashboard-card rounded-xl shadow-xl overflow-hidden border-none bg-white p-6 mb-6">
-          <h3 class="text-lg font-black text-slate-900 mb-6 text-center">กราฟสรุปปริมาณซื้อจ้างรายสัปดาห์</h3>
-          <div class="flex items-center justify-center">
-            <div class="relative w-64 h-64">
-              <!-- SVG Donut Chart -->
-              <svg viewBox="0 0 36 36" class="w-full h-full">
-                <path
-                  v-for="(item, index) in data?.procurementData.weeklyTotals"
-                  :key="item.week"
-                  :d="getDonutPath(index, data?.procurementData.weeklyTotals)"
-                  :fill="getProcurementColor(index)"
-                  stroke="white"
-                  stroke-width="0.5"
-                />
-                <circle cx="18" cy="18" r="8" fill="white" />
-              </svg>
-              <!-- Labels placed in boxes around the chart -->
-              <div v-for="(item, index) in data?.procurementData.weeklyTotals" :key="`label-${item.week}`" class="absolute" :style="getLabelPosition(index, data?.procurementData.weeklyTotals)">
-                 <div class="text-[10px] font-black text-slate-800 bg-white px-2 py-1 rounded shadow border border-slate-200 text-center pointer-events-none">
-                   {{ item.week }}<br/>{{ item.amount }} ({{ ((item.amount / data!.procurementData.totalProcurement) * 100).toFixed(1) }}%)
-                 </div>
+        <div
+          v-if="procurementWeeklyTotals.length || procurementStatusSummary.length"
+          class="grid gap-4 xl:grid-cols-[210px_minmax(0,1fr)_minmax(0,1fr)]"
+        >
+          <aside class="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
+            <section class="rounded-xl border border-amber-300 bg-amber-50 p-5">
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <p class="text-xs font-black text-slate-600">
+                    {{ procurementWeeklyTotals[0]?.week || 'สัปดาห์' }}
+                    -
+                    {{ procurementWeeklyTotals[procurementWeeklyTotals.length - 1]?.week || 'ล่าสุด' }}
+                  </p>
+                  <p class="mt-1 text-[11px] font-bold text-amber-700">ปริมาณซื้อ/จ้าง</p>
+                </div>
+                <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-white/80 text-amber-600 ring-1 ring-amber-200">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 3h18v18H3z"/><path d="M8 7h8M8 12h8M8 17h5"/>
+                  </svg>
+                </div>
+              </div>
+              <p class="mt-8 text-center text-5xl font-black text-slate-800">
+                {{ currentProcurementTotal.toLocaleString('th-TH') }}
+              </p>
+              <p class="mt-2 text-center text-xs font-bold text-slate-500">รายการทั้งหมด</p>
+            </section>
+
+            <section class="rounded-xl border border-emerald-200 bg-white p-5">
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <p class="text-xs font-black text-slate-700">สถานะการดำเนินงาน</p>
+                  <p class="mt-1 text-[11px] font-bold text-emerald-700">รวมทุกขั้นตอน</p>
+                </div>
+                <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 19V9M10 19V5M16 19v-7M22 19V3"/>
+                  </svg>
+                </div>
+              </div>
+              <p class="mt-7 text-center text-4xl font-black text-emerald-600">
+                {{ procurementStatusTotal.toLocaleString('th-TH') }}
+              </p>
+              <p class="mt-2 text-center text-xs font-bold text-slate-500">รายการในกระบวนการ</p>
+            </section>
+          </aside>
+
+          <section class="min-w-0 rounded-xl border border-sky-200 bg-sky-50/75 p-4 sm:p-5">
+            <div class="mb-1 flex items-center justify-between gap-3">
+              <h2 class="text-xl font-black text-slate-950">ปริมาณการซื้อ/จ้างรายสัปดาห์</h2>
+              <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/70 text-amber-600 ring-1 ring-sky-100">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9 11h6M9 15h6M9 7h1"/><path d="M5 3h14v18H5z"/>
+                </svg>
               </div>
             </div>
-          </div>
+            <HighchartsBarChart :options="procurementWeeklyChartOptions" :min-height="300" />
+            <div class="overflow-x-auto rounded-lg border border-sky-200 bg-white/90">
+              <table class="w-full min-w-[420px] table-fixed border-collapse text-center">
+                <thead>
+                  <tr class="bg-sky-50 text-[11px] font-black text-slate-700">
+                    <th v-for="item in procurementWeeklyTotals" :key="`weekly-head-${item.week}`" scope="col" class="border-b border-sky-200 px-3 py-2.5">{{ item.week }}</th>
+                    <th scope="col" class="border-b border-sky-200 px-3 py-2.5">รวม</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr class="text-base font-black text-slate-800">
+                    <td v-for="item in procurementWeeklyTotals" :key="`weekly-value-${item.week}`" class="px-3 py-3">{{ item.amount.toLocaleString('th-TH') }}</td>
+                    <td class="px-3 py-3 text-sky-700">{{ currentProcurementTotal.toLocaleString('th-TH') }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="min-w-0 rounded-xl border border-indigo-200 bg-indigo-50/60 p-4 sm:p-5">
+            <div class="mb-1 flex items-center justify-between gap-3">
+              <h2 class="text-xl font-black text-slate-950">สถานะการซื้อจ้าง</h2>
+              <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/70 text-indigo-400 ring-1 ring-indigo-100">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M8 2v4M16 2v4M3 10h18"/><rect x="3" y="4" width="18" height="17" rx="2"/>
+                </svg>
+              </div>
+            </div>
+            <HighchartsBarChart :options="procurementStatusChartOptions" :min-height="300" />
+            <div class="overflow-x-auto rounded-lg border border-indigo-200 bg-white/90">
+              <table class="w-full min-w-[760px] table-fixed border-collapse text-center">
+                <thead>
+                  <tr class="bg-indigo-50 text-[10px] font-black text-slate-700">
+                    <th v-for="item in procurementStatusSummary" :key="`status-head-${item.status}`" scope="col" class="border-b border-indigo-200 px-2 py-2.5 leading-tight">{{ item.status }}</th>
+                    <th scope="col" class="border-b border-indigo-200 px-2 py-2.5">รวม</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr class="text-base font-black text-slate-800">
+                    <td v-for="item in procurementStatusSummary" :key="`status-value-${item.status}`" class="px-2 py-3">{{ item.count.toLocaleString('th-TH') }}</td>
+                    <td class="px-2 py-3 text-indigo-700">{{ procurementStatusTotal.toLocaleString('th-TH') }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
         </div>
 
-        <!-- Procurement Data Section -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          <!-- Weekly Totals Card -->
-          <div class="dashboard-card rounded-xl shadow-xl border-none bg-white p-6">
-            <h3 class="text-lg font-black text-slate-900 mb-4">ปริมาณการซื้อ/จ้างรายสัปดาห์</h3>
-            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <div v-for="item in data?.procurementData.weeklyTotals" :key="item.week" class="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                <p class="text-xs font-bold text-slate-500 uppercase">{{ item.week }}</p>
-                <p class="text-2xl font-black text-sky-700">{{ item.amount }}</p>
-              </div>
-            </div>
-            <div class="mt-6 p-4 bg-slate-900 rounded-2xl text-center">
-              <p class="text-sm font-black text-white">รวมทั้งหมด: {{ data?.procurementData.totalProcurement }}</p>
-            </div>
-          </div>
-          
-          <!-- Status Summary Card -->
-          <div class="dashboard-card rounded-xl shadow-xl border-none bg-white p-6">
-            <h3 class="text-lg font-black text-slate-900 mb-6 text-center">สถานะงานซื้อจ้าง</h3>
-            <div class="flex items-end justify-between h-48 gap-3 pt-10 px-4">
-              <div v-for="item in data?.procurementData.statusSummary" :key="item.status" class="flex flex-col items-center flex-1 group h-full">
-                <div class="relative w-10 flex justify-center items-end bg-slate-100 rounded-t-xl h-full shadow-inner">
-                   <!-- Bar with gradient and shadow -->
-                   <div 
-                     class="w-full transition-all duration-700 ease-out rounded-t-xl shadow-lg group-hover:brightness-110" 
-                     :style="{ 
-                       height: `${(item.count / Math.max(...data!.procurementData.statusSummary.map(s => s.count), 1)) * 100}%`, 
-                       background: `linear-gradient(to top, ${getStatusColor(item.status)}, ${getStatusColor(item.status)}cc)` 
-                     }"
-                   ></div>
-                   <!-- Value Label on top of bar -->
-                   <span class="absolute -top-7 text-xs font-black drop-shadow-sm" :style="{ color: getStatusColor(item.status) }">{{ item.count }}</span>
-                </div>
-                <span class="text-[10px] font-black text-slate-500 mt-3 text-center rotate-45 origin-top-left uppercase tracking-tighter">{{ item.status }}</span>
-              </div>
-            </div>
-          </div>
+        <div
+          v-else
+          class="rounded-xl border border-slate-200 bg-white px-6 py-16 text-center text-sm font-bold text-slate-500"
+        >
+          ไม่พบข้อมูลจัดซื้อจัดจ้าง
         </div>
 
         <div class="dashboard-card rounded-xl shadow-xl overflow-hidden border-none bg-white">
