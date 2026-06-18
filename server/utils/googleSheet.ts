@@ -38,7 +38,7 @@ async function getSheetTitleById(client: ReturnType<typeof getSheetsClient>, spr
   return sheet?.properties?.title || '';
 }
 
-async function getSummarySheetTitle(client: ReturnType<typeof getSheetsClient>, spreadsheetId: string) {
+async function getSummarySheetTitle(client: ReturnType<typeof getSheetsClient>, spreadsheetId: string, filters: { year?: string; month?: string } = {}) {
   const explicitTitle = process.env.GOOGLE_OT_EMPLOYEE_SHEET_TITLE;
   if (explicitTitle) return explicitTitle;
 
@@ -47,6 +47,28 @@ async function getSummarySheetTitle(client: ReturnType<typeof getSheetsClient>, 
     fields: 'sheets(properties(title,index))',
   });
   const sheets = metadata.data.sheets?.sort((a, b) => (a.properties?.index || 0) - (b.properties?.index || 0)) || [];
+  
+  // Try to find a sheet that matches the current month name in Thai
+  if (filters.month && filters.month !== 'all') {
+    const monthNames = [
+      'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+      'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+    ];
+    const monthShortNames = [
+      'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
+      'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'
+    ];
+    const monthIdx = parseInt(filters.month) - 1;
+    const monthName = monthNames[monthIdx];
+    const monthShortName = monthShortNames[monthIdx];
+
+    const match = sheets.find(item => 
+      item.properties?.title?.includes('สรุป') && 
+      (item.properties?.title?.includes(monthName) || item.properties?.title?.includes(monthShortName))
+    );
+    if (match) return match.properties?.title || '';
+  }
+
   const summarySheet = sheets.find(item => item.properties?.title?.includes('สรุป'));
   return summarySheet?.properties?.title || sheets[0]?.properties?.title || '';
 }
@@ -55,11 +77,11 @@ function quoteSheetName(sheetName: string) {
   return `'${sheetName.replace(/'/g, "''")}'`;
 }
 
-export async function getRawDashboardSheets() {
+export async function getRawDashboardSheets(filters: { year?: string; month?: string } = {}) {
   const client = getSheetsClient();
   const [otContractorSummaryTitle, otEmployeeSummaryTitle] = await Promise.all([
     getSheetTitleById(client, OT_CONTRACTOR_SPREADSHEET_ID, OT_CONTRACTOR_SHEET_ID),
-    OT_EMPLOYEE_SPREADSHEET_ID ? getSummarySheetTitle(client, OT_EMPLOYEE_SPREADSHEET_ID) : Promise.resolve(''),
+    OT_EMPLOYEE_SPREADSHEET_ID ? getSummarySheetTitle(client, OT_EMPLOYEE_SPREADSHEET_ID, filters) : Promise.resolve(''),
   ]);
 
   const [dashboardRes, infoRes, otSummaryRes, otEmployeeSummaryRes, otCheckErrorRes, otEmployeeCheckErrorRes] = await Promise.all([

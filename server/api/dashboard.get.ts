@@ -34,7 +34,7 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const dashboard = normalizeDashboard(await getRawDashboardSheets(), { year, month });
+  const dashboard = normalizeDashboard(await getRawDashboardSheets({ year, month }), { year, month });
 
   if (canUseCache) {
     cache.data = dashboard;
