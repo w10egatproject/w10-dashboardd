@@ -23,6 +23,7 @@ function isTrue(value: unknown) {
 function projectFromRow(row: string[], index: number, source = 'Main') {
   return {
     id: text(row[3]) || text(row[0]) || `${source}-${index}`,
+    detailItem: text(row[0]) || '-',
     ecmProcurement: text(row[2]),
     ecm: text(row[2]),
     order: text(row[3]) || '-',
@@ -34,6 +35,81 @@ function projectFromRow(row: string[], index: number, source = 'Main') {
     status: text(row[11]) || 'รอดำเนินการ',
     action: text(row[21]) || '-',
     department: text(row[8]) || 'N/A',
+    normal11: text(row[22]) || '-',
+    ot: text(row[23]) || '-',
+    contractorNormal11: text(row[24]) || '-',
+    contractorOt11: text(row[25]) || '-',
+    weekFlags: {
+      W11: isTrue(row[12]),
+      W12: isTrue(row[13]),
+      W13: isTrue(row[14]),
+      W14: isTrue(row[15]),
+    },
+  };
+}
+
+function procurementProjectFromDetailRow(row: string[], index: number) {
+  const detailItem = text(row[0]);
+  const ecmProcurement = text(row[1]);
+  const ecm = text(row[1]);
+  const order = text(row[2]);
+
+  return {
+    id: `${ecmProcurement || order || detailItem || 'PROC'}-${index}`,
+    detailItem: detailItem || '-',
+    ecmProcurement: ecmProcurement || '-',
+    ecm: ecm || '-',
+    order: order || '-',
+    name: text(row[3]) || '-',
+    equipGroup: text(row[4]) || '-',
+    date: text(row[5]) || '-',
+    startDate: text(row[6]) || '-',
+    endDate: text(row[7]) || '-',
+    status: text(row[8]) || '-',
+    action: text(row[17]) || '-',
+    department: 'Procurement',
+    normal11: text(row[9]) || '-',
+    ot: text(row[10]) || '-',
+    contractorNormal11: text(row[11]) || '-',
+    contractorOt11: text(row[12]) || '-',
+    weekFlags: {
+      W11: isTrue(row[13]),
+      W12: isTrue(row[14]),
+      W13: isTrue(row[15]),
+      W14: isTrue(row[16]),
+    },
+  };
+}
+
+function procurementProjectFromDashboardRow(row: string[], index: number) {
+  const ecmProcurement = text(row[5]);
+  const ecm = text(row[6]);
+  const order = text(row[7]);
+
+  return {
+    id: `PROC-REPORT-${ecmProcurement || ecm || order || index}-${index}`,
+    detailItem: ecmProcurement || '-',
+    ecmProcurement: ecmProcurement || '-',
+    ecm: ecm || '-',
+    order: order || '-',
+    name: text(row[8]) || '-',
+    equipGroup: text(row[9]) || '-',
+    date: text(row[10]) || '-',
+    startDate: text(row[11]) || '-',
+    endDate: text(row[12]) || '-',
+    status: text(row[13]) || '-',
+    action: text(row[14]) || '-',
+    department: 'Procurement',
+    normal11: '-',
+    ot: '-',
+    contractorNormal11: '-',
+    contractorOt11: '-',
+    weekFlags: {
+      W11: false,
+      W12: false,
+      W13: false,
+      W14: false,
+    },
   };
 }
 
@@ -53,23 +129,41 @@ function buildProjects(infoRows: SheetRows) {
   return { projects, weeklyProjects };
 }
 
+function buildProcurementProjects(procurementRows: SheetRows) {
+  return procurementRows
+    .filter(row => [1, 2, 3, 4, 5, 6, 7, 8, 17].some(columnIndex => text(row[columnIndex])))
+    .filter(row => !['ecm', 'w/o', 'order'].includes(text(row[2]).toLowerCase()))
+    .filter(row => !['ecm ซื้อจ้าง', 'ecm'].includes(text(row[1]).toLowerCase()))
+    .map((row, index) => procurementProjectFromDetailRow(row, index));
+}
+
+function buildProcurementReportProjects(dashboardRows: SheetRows) {
+  return dashboardRows
+    .slice(31)
+    .filter(row => [5, 6, 7, 8, 9, 10, 11, 12, 13, 14].some(columnIndex => text(row[columnIndex])))
+    .filter(row => !['ecmซื้อจ้าง', 'ecm'].includes(text(row[5]).toLowerCase()))
+    .filter(row => !['ecm', 'w/o'].includes(text(row[6]).toLowerCase()))
+    .map((row, index) => procurementProjectFromDashboardRow(row, index));
+}
+
 function buildGroupStats(infoRows: SheetRows, weeklyProjects: Record<string, any[]>) {
-  const w11Projects = weeklyProjects.W11 || [];
-  const w11FinishProjects = w11Projects.filter(p => p.status.toLowerCase().includes('เสร็จ') || p.status.toLowerCase().includes('finish') || p.status.toLowerCase().includes('sap'));
-  const w11PendingProjects = w11Projects.filter(p => p.status.toLowerCase().includes('รอ') || p.status.toLowerCase().includes('pending'));
-  const w11OtherFinish = numberAt(infoRows, 3, 23);
+  const buildWeeklyStat = (columnIndex: number) => {
+    const entrance = numberAt(infoRows, 0, columnIndex);
+    const left = numberAt(infoRows, 1, columnIndex);
+    const sheetFinish = numberAt(infoRows, 2, columnIndex);
+    const otherFinish = numberAt(infoRows, 3, columnIndex);
+    const finish = sheetFinish || Math.max(entrance - left, 0);
+    const sheetOut = numberAt(infoRows, 4, columnIndex);
+    const out = sheetOut || (finish + otherFinish);
+
+    return { entrance, left, finish, otherFinish, out };
+  };
 
   const groupStats = {
-    W11: {
-      entrance: w11Projects.length,
-      left: w11PendingProjects.length,
-      finish: w11FinishProjects.length,
-      otherFinish: w11OtherFinish,
-      out: w11FinishProjects.length + w11OtherFinish
-    },
-    W12: { entrance: numberAt(infoRows, 0, 27), left: numberAt(infoRows, 1, 27), finish: numberAt(infoRows, 2, 27), otherFinish: numberAt(infoRows, 3, 27), out: numberAt(infoRows, 4, 27) },
-    W13: { entrance: numberAt(infoRows, 0, 31), left: numberAt(infoRows, 1, 31), finish: numberAt(infoRows, 2, 31), otherFinish: numberAt(infoRows, 3, 31), out: numberAt(infoRows, 4, 31) },
-    W14: { entrance: numberAt(infoRows, 0, 35), left: numberAt(infoRows, 1, 35), finish: numberAt(infoRows, 2, 35), otherFinish: numberAt(infoRows, 3, 35), out: numberAt(infoRows, 4, 35) },
+    W11: buildWeeklyStat(23),
+    W12: buildWeeklyStat(27),
+    W13: buildWeeklyStat(31),
+    W14: buildWeeklyStat(35),
   };
 
   return {
@@ -333,8 +427,9 @@ function buildProcurementData(infoRows: SheetRows) {
   return { statusSummary, weeklyTotals, totalProcurement };
 }
 
-export function normalizeDashboard(rawSheets: { dashboard: SheetRows; info: SheetRows; otSummary?: SheetRows; otEmployeeSummary?: SheetRows; otCheckError?: SheetRows; otEmployeeCheckError?: SheetRows }, filters: { year?: string; month?: string } = {}) {
+export function normalizeDashboard(rawSheets: { dashboard: SheetRows; info: SheetRows; procurementDetail?: SheetRows; otSummary?: SheetRows; otEmployeeSummary?: SheetRows; otCheckError?: SheetRows; otEmployeeCheckError?: SheetRows }, filters: { year?: string; month?: string } = {}) {
   const infoRows = rawSheets.info || [];
+  const procurementRows = rawSheets.procurementDetail?.length ? rawSheets.procurementDetail : infoRows.slice(10);
   const { projects, weeklyProjects } = buildProjects(infoRows);
   const groupStats = buildGroupStats(infoRows, weeklyProjects);
   const statusData = buildStatusData(infoRows);
@@ -347,6 +442,8 @@ export function normalizeDashboard(rawSheets: { dashboard: SheetRows; info: Shee
   return {
     raw: rawSheets,
     projects,
+    procurementReportProjects: buildProcurementReportProjects(rawSheets.dashboard || []),
+    procurementProjects: buildProcurementProjects(procurementRows),
     weeklyData: weeks.map(week => ({ week, ...groupStats[week] })),
     weeklyProjects,
     statusSummary: { total: { entrance: groupStats.W_all.entrance } },

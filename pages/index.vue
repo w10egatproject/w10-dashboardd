@@ -3,6 +3,7 @@ type WeekKey = 'W11' | 'W12' | 'W13' | 'W14';
 
 interface DashboardProject {
   id: string;
+  detailItem: string;
   ecmProcurement: string; // ECM ซื้อจ้าง
   ecm: string; // ECM
   order: string; // W/O
@@ -14,6 +15,11 @@ interface DashboardProject {
   status: string; // สถานะ
   action: string; // การดำเนินการ
   department: string;
+  normal11: string;
+  ot: string;
+  contractorNormal11: string;
+  contractorOt11: string;
+  weekFlags: Record<WeekKey, boolean>;
 }
 
 interface OTSummary {
@@ -63,6 +69,8 @@ interface OTSummary {
 
 interface DashboardData {
   projects: DashboardProject[];
+  procurementReportProjects: DashboardProject[];
+  procurementProjects: DashboardProject[];
   groupStats: Record<WeekKey, { entrance: number; left: number; finish: number; otherFinish: number; out: number }> & {
     W_all: { entrance: number; left: number; finish: number; otherFinish: number; out: number };
   };
@@ -137,10 +145,11 @@ const months = [
 const years = Array.from({ length: 10 }, (_, index) => String(2020 + index));
 
 const searchTerm = ref('');
-const activeTab = ref<'dashboard' | 'report' | 'otEmployee' | 'ot'>('dashboard');
+const activeTab = ref<'dashboard' | 'report' | 'procurementStatus' | 'otEmployee' | 'ot'>('dashboard');
 const selectedMonth = ref('');
 const selectedYear = ref('');
 const isApplyingFilters = ref(false);
+const selectedProcurementStatus = ref('');
 const employeeOTSheetLinks = [
   {
     label: 'เปิด Google Sheet สรุปOTประจำเดือนปี2569_กบย-ช_กสบ-ช',
@@ -180,6 +189,16 @@ const { data, pending, error, refresh } = useFetch<DashboardData>('/api/dashboar
   server: false,
   watch: false,
 });
+const {
+  data: procurementAllData,
+  pending: pendingProcurementAll,
+  refresh: refreshProcurementAll,
+} = useFetch<DashboardData>('/api/dashboard', {
+  key: 'procurement-status-all-dashboard',
+  server: false,
+  watch: false,
+  immediate: false,
+});
 
 watch(data, (value) => {
   if (!value) return;
@@ -187,11 +206,35 @@ watch(data, (value) => {
   selectedMonth.value = value.currentMonth || 'all';
 }, { immediate: true });
 
+watch(activeTab, async (tab) => {
+  if (tab !== 'procurementStatus' && tab !== 'report') {
+    selectedProcurementStatus.value = '';
+    return;
+  }
+  if (tab === 'report') {
+    selectedProcurementStatus.value = '';
+    return;
+  }
+  if (procurementAllData.value || pendingProcurementAll.value) return;
+  await refreshProcurementAll({
+    query: {
+      applyFilters: 'true',
+      year: 'all',
+      month: 'all',
+    },
+  });
+});
+
 const total = computed(() => data.value?.statusData.total || 0);
 const sap = computed(() => data.value?.statusData.sap || 0);
 const pendingCount = computed(() => data.value?.statusData.pending || 0);
 const finish = computed(() => data.value?.statusData.finish || 0);
 const allProjects = computed(() => data.value?.projects || []);
+const isProcurementSurface = computed(() => activeTab.value === 'report' || activeTab.value === 'procurementStatus');
+const procurementStatusSource = computed(() => activeTab.value === 'procurementStatus' ? (procurementAllData.value || data.value) : data.value);
+const procurementStatusProjects = computed(() => procurementStatusSource.value?.procurementProjects || []);
+const procurementReportProjects = computed(() => data.value?.procurementReportProjects || []);
+const procurementProjects = computed(() => activeTab.value === 'report' ? procurementReportProjects.value : procurementStatusProjects.value);
 const equipmentItems = computed(() => data.value?.equipmentData || []);
 const pendingOT = computed(() => pending.value && !data.value);
 const errorOT = computed(() => error.value);
@@ -263,14 +306,32 @@ const otGroups = computed(() => buildOTGroups(currentOTSummary.value, showOTChec
 const currentOTGroups = computed(() => otGroups.value);
 const maxWeekEntrance = computed(() => Math.max(...weeks.map(week => data.value?.groupStats[week].entrance || 0), 1));
 const maxEquipmentWeekValue = computed(() => Math.max(...equipmentItems.value.flatMap(item => item.values || []), 1));
-const procurementWeeklyTotals = computed(() => data.value?.procurementData.weeklyTotals || []);
-const procurementStatusSummary = computed(() => data.value?.procurementData.statusSummary || []);
+const procurementWeeklyTotals = computed(() => procurementStatusSource.value?.procurementData.weeklyTotals || []);
+const procurementStatusSummary = computed(() => procurementStatusSource.value?.procurementData.statusSummary || []);
 const currentProcurementTotal = computed(() =>
-  data.value?.procurementData.totalProcurement
+  procurementStatusSource.value?.procurementData.totalProcurement
   || procurementWeeklyTotals.value.reduce((sum, item) => sum + item.amount, 0)
 );
+const procurementStatusSummaryTotal = computed(() => {
+  if (!isProcurementSurface.value) return procurementTableProjects.value.length;
+  return currentProcurementTotal.value ? currentProcurementTotal.value * 2 : procurementTableProjects.value.length;
+});
 const procurementStatusTotal = computed(() =>
   procurementStatusSummary.value.reduce((sum, item) => sum + item.count, 0)
+);
+const procurementStatusOptions = computed(() =>
+  Array.from(new Set(procurementProjects.value.map(project => project.status).filter(Boolean)))
+);
+const procurementFilterSummary = computed(() => {
+  if (activeTab.value === 'procurementStatus') return 'ทุกปี · รวมทุกเดือน';
+  const year = selectedYear.value && selectedYear.value !== 'all' ? selectedYear.value : 'ทุกปี';
+  const month = selectedMonth.value && selectedMonth.value !== 'all'
+    ? (months.find(item => item.value === selectedMonth.value)?.label || selectedMonth.value)
+    : 'รวมทุกเดือน';
+  return `${year} · ${month}`;
+});
+const hasProcurementFilters = computed(() =>
+  Boolean(searchTerm.value.trim() || selectedProcurementStatus.value.trim())
 );
 const procurementWeekColors = ['#f6d96f', '#f5ad63', '#6fc7e8', '#72a8e8'];
 const procurementStatusColors = [
@@ -483,6 +544,35 @@ const filteredProjects = computed(() => {
     .slice(0, 25);
 });
 
+const procurementTableProjects = computed(() => {
+  const term = searchTerm.value.trim().toLowerCase();
+  const status = selectedProcurementStatus.value.trim();
+  const projects = status
+    ? procurementProjects.value.filter(project => project.status === status)
+    : procurementProjects.value;
+  if (!term) return projects;
+
+  return projects.filter(project =>
+    [
+      project.ecmProcurement,
+      project.ecm,
+      project.order,
+      project.name,
+      project.equipGroup,
+      project.department,
+      project.status,
+      project.action,
+      project.normal11,
+      project.ot,
+      project.contractorNormal11,
+      project.contractorOt11,
+    ]
+      .join(' ')
+      .toLowerCase()
+      .includes(term),
+  );
+});
+
 const statusCards = computed(() => [
   {
     title: 'Pending',
@@ -559,6 +649,32 @@ function statusBadge(status: string) {
   return 'bg-slate-50 text-slate-600 ring-1 ring-slate-600/20';
 }
 
+function procurementStatusBadge(status: string) {
+  const lower = status.toLowerCase();
+  if (lower.includes('1.') || lower.includes('รอซื้อ')) {
+    return 'bg-amber-800 text-white shadow-sm';
+  }
+  if (lower.includes('2.')) {
+    return 'bg-sky-100 text-sky-800 ring-1 ring-sky-300';
+  }
+  if (lower.includes('3.')) {
+    return 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-300';
+  }
+  if (lower.includes('4.') || lower.includes('เสนอราคา')) {
+    return 'bg-pink-300 text-slate-900 shadow-sm';
+  }
+  if (lower.includes('5.') || lower.includes('ติดตามpo')) {
+    return 'bg-emerald-100 text-emerald-800 shadow-sm ring-1 ring-emerald-200';
+  }
+  if (lower.includes('6.') || lower.includes('ส่งของ')) {
+    return 'bg-cyan-300 text-slate-900 shadow-sm';
+  }
+  if (lower.includes('เสร็จ') || lower.includes('finish')) {
+    return 'bg-rose-100 text-rose-800 ring-1 ring-rose-300';
+  }
+  return 'bg-slate-100 text-slate-700 ring-1 ring-slate-300';
+}
+
 async function applyFilters() {
   isApplyingFilters.value = true;
   try {
@@ -622,6 +738,14 @@ async function applyFilters() {
         </button>
         <button
           class="flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all"
+          :class="activeTab === 'procurementStatus' ? 'bg-sky-700 text-white shadow-md' : 'text-slate-600 hover:bg-slate-50'"
+          @click="activeTab = 'procurementStatus'"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V9"/><path d="M10 19V5"/><path d="M16 19v-7"/><path d="M22 19V3"/></svg>
+          สถานะการซื้อจ้างทั้งหมด
+        </button>
+        <button
+          class="flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all"
           :class="activeTab === 'otEmployee' ? 'bg-sky-700 text-white shadow-md' : 'text-slate-600 hover:bg-slate-50'"
           @click="activeTab = 'otEmployee'"
         >
@@ -638,7 +762,7 @@ async function applyFilters() {
         </button>
       </div>
 
-      <div v-if="activeTab !== 'ot' && activeTab !== 'otEmployee'" class="filter-panel rounded-xl p-5 mb-6 border-sky-200 shadow-lg shadow-sky-900/5 bg-white">
+      <div v-if="activeTab !== 'ot' && activeTab !== 'otEmployee' && !isProcurementSurface" class="filter-panel rounded-xl p-5 mb-6 border-sky-200 shadow-lg shadow-sky-900/5 bg-white">
           <div class="flex flex-col lg:flex-row lg:items-center gap-4">
             <div class="flex items-center gap-3 shrink-0">
               <div class="p-2 bg-sky-600 rounded-lg text-white">
@@ -763,7 +887,51 @@ async function applyFilters() {
             </div>
           </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 justify-items-center">
+          <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div
+              v-for="(week, index) in weeks"
+              :key="`wo-old-card-${week}`"
+              class="relative min-h-[260px] overflow-hidden rounded-2xl border p-5 shadow-sm"
+              :class="[
+                index === 0 ? 'border-amber-300 bg-amber-100/70' :
+                index === 1 ? 'border-emerald-300 bg-emerald-100/70' :
+                index === 2 ? 'border-pink-300 bg-pink-100/70' :
+                'border-sky-300 bg-sky-100/70'
+              ]"
+            >
+              <div class="flex items-center gap-3">
+                <img
+                  :src="index === 0 ? '/images/chanwit-Photoroom.png' : index === 1 ? '/images/saman-Photoroom.png' : index === 2 ? '/images/sitiporn-Photoroom.png' : '/images/wutisak-Photoroom.png'"
+                  class="h-12 w-12 rounded-full bg-white object-cover p-0.5 ring-2 ring-white shadow-sm"
+                  alt="User"
+                />
+                <h3 class="text-2xl font-black leading-tight text-slate-950">
+                  {{ week }} เข้า {{ data?.groupStats[week]?.entrance || 0 }}
+                </h3>
+              </div>
+
+              <div class="mt-5 rounded-xl bg-white/65 px-5 py-4 ring-1 ring-white/70">
+                <div class="flex items-center justify-between gap-4 py-2">
+                  <span class="text-base font-black text-slate-600">เข้าเดือนนี้ยังไม่เสร็จ</span>
+                  <span class="text-lg font-black text-slate-950">{{ data?.groupStats[week]?.left || 0 }}</span>
+                </div>
+                <div class="flex items-center justify-between gap-4 py-2">
+                  <span class="text-base font-black text-slate-600">เข้าเดือนนี้เสร็จ</span>
+                  <span class="text-lg font-black text-slate-950">{{ data?.groupStats[week]?.finish || 0 }}</span>
+                </div>
+                <div class="flex items-center justify-between gap-4 py-2">
+                  <span class="text-base font-black text-slate-600">เสร็จจากเดือนอื่น</span>
+                  <span class="text-lg font-black text-slate-950">{{ data?.groupStats[week]?.otherFinish || 0 }}</span>
+                </div>
+                <div class="mt-2 flex items-center justify-between gap-4 border-t border-slate-200/80 pt-3">
+                  <span class="text-base font-black text-slate-950">งานออก</span>
+                  <span class="text-2xl font-black text-slate-950">{{ data?.groupStats[week]?.out || 0 }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="false" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 justify-items-center">
             <!-- Weekly Compact Cards 1-4 -->
             <div 
               v-for="(week, index) in weeks" 
@@ -936,13 +1104,49 @@ async function applyFilters() {
       </section>
       </template>
 
-      <template v-else-if="activeTab === 'report'">
+      <template v-else-if="activeTab === 'report' || activeTab === 'procurementStatus'">
       <section class="space-y-4">
+        <div v-if="activeTab === 'report'" class="rounded-xl border border-sky-300 bg-sky-50/85 p-4 shadow-sm">
+          <div class="flex flex-col gap-4 lg:flex-row lg:items-center">
+            <div class="flex min-w-0 items-center gap-3 lg:w-56">
+              <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sky-600 text-white">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+                </svg>
+              </div>
+              <div class="min-w-0">
+                <p class="text-sm font-black text-slate-950">ตัวกรองข้อมูล</p>
+                <p class="text-[10px] font-bold text-sky-700">เลือกเดือน/ปีเพื่อกรองข้อมูลในตาราง</p>
+              </div>
+            </div>
+
+            <div class="grid flex-1 gap-3 sm:grid-cols-2">
+              <select v-model="selectedMonth" class="select select-bordered h-10 min-h-10 w-full rounded-md border-sky-100 bg-white text-sm font-black text-slate-900 focus:border-sky-500 focus:outline-none">
+                <option value="all">ทุกเดือน</option>
+                <option v-for="month in months" :key="month.value" :value="month.value">{{ month.label }}</option>
+              </select>
+              <select v-model="selectedYear" class="select select-bordered h-10 min-h-10 w-full rounded-md border-sky-100 bg-white text-sm font-black text-slate-900 focus:border-sky-500 focus:outline-none">
+                <option value="all">ทุกปี</option>
+                <option v-for="year in years" :key="year" :value="year">{{ year }}</option>
+              </select>
+            </div>
+
+            <button
+              type="button"
+              class="btn h-10 min-h-10 rounded-md border-sky-700 bg-sky-700 px-7 text-sm font-black text-white hover:border-sky-800 hover:bg-sky-800"
+              :disabled="isApplyingFilters"
+              @click="applyFilters"
+            >
+              {{ isApplyingFilters ? 'กำลังกรอง...' : 'กรองข้อมูล' }}
+            </button>
+          </div>
+        </div>
+
         <div
           v-if="procurementWeeklyTotals.length || procurementStatusSummary.length"
-          class="grid gap-4 xl:grid-cols-[210px_minmax(0,1fr)_minmax(0,1fr)]"
+          class="grid gap-4 xl:grid-cols-2"
         >
-          <aside class="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
+          <aside v-if="false" class="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
             <section class="rounded-xl border border-amber-300 bg-amber-50 p-5">
               <div class="flex items-start justify-between gap-3">
                 <div>
@@ -1026,14 +1230,50 @@ async function applyFilters() {
               <table class="w-full min-w-[760px] table-fixed border-collapse text-center">
                 <thead>
                   <tr class="bg-indigo-50 text-[10px] font-black text-slate-700">
-                    <th v-for="item in procurementStatusSummary" :key="`status-head-${item.status}`" scope="col" class="border-b border-indigo-200 px-2 py-2.5 leading-tight">{{ item.status }}</th>
-                    <th scope="col" class="border-b border-indigo-200 px-2 py-2.5">รวม</th>
+                    <th v-for="item in procurementStatusSummary" :key="`status-head-${item.status}`" scope="col" class="border-b border-indigo-200 p-0 leading-tight">
+                      <button
+                        type="button"
+                        class="h-full w-full px-2 py-2.5 text-[10px] font-black leading-tight transition hover:bg-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-inset"
+                        :class="selectedProcurementStatus === item.status ? 'bg-emerald-100 text-emerald-900' : 'text-slate-700'"
+                        @click="selectedProcurementStatus = item.status"
+                      >
+                        {{ item.status }}
+                      </button>
+                    </th>
+                    <th scope="col" class="border-b border-indigo-200 p-0">
+                      <button
+                        type="button"
+                        class="h-full w-full px-2 py-2.5 text-[10px] font-black transition hover:bg-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-inset"
+                        :class="!selectedProcurementStatus ? 'bg-emerald-100 text-emerald-900' : 'text-slate-700'"
+                        @click="selectedProcurementStatus = ''"
+                      >
+                        รวม
+                      </button>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr class="text-base font-black text-slate-800">
-                    <td v-for="item in procurementStatusSummary" :key="`status-value-${item.status}`" class="px-2 py-3">{{ item.count.toLocaleString('th-TH') }}</td>
-                    <td class="px-2 py-3 text-indigo-700">{{ procurementStatusTotal.toLocaleString('th-TH') }}</td>
+                    <td v-for="item in procurementStatusSummary" :key="`status-value-${item.status}`" class="p-0">
+                      <button
+                        type="button"
+                        class="h-full w-full px-2 py-3 text-base font-black transition hover:bg-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-inset"
+                        :class="selectedProcurementStatus === item.status ? 'bg-emerald-100 text-emerald-900' : 'text-slate-800'"
+                        @click="selectedProcurementStatus = item.status"
+                      >
+                        {{ item.count.toLocaleString('th-TH') }}
+                      </button>
+                    </td>
+                    <td class="p-0">
+                      <button
+                        type="button"
+                        class="h-full w-full px-2 py-3 text-base font-black transition hover:bg-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-inset"
+                        :class="!selectedProcurementStatus ? 'bg-emerald-100 text-emerald-900' : 'text-indigo-700'"
+                        @click="selectedProcurementStatus = ''"
+                      >
+                        {{ procurementStatusTotal.toLocaleString('th-TH') }}
+                      </button>
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -1042,23 +1282,46 @@ async function applyFilters() {
         </div>
 
         <div
-          v-else
+          v-else-if="activeTab === 'report'"
           class="rounded-xl border border-slate-200 bg-white px-6 py-16 text-center text-sm font-bold text-slate-500"
         >
           ไม่พบข้อมูลจัดซื้อจัดจ้าง
         </div>
 
-        <div class="dashboard-card rounded-xl shadow-xl overflow-hidden border-none bg-white">
+        <div
+          class="dashboard-card overflow-hidden border-none"
+          :class="isProcurementSurface ? 'rounded-xl bg-emerald-50 shadow-[0_0_0_1px_rgba(110,231,183,0.72)]' : 'rounded-xl bg-white shadow-xl'"
+        >
         <div class="p-6">
           <div class="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div class="min-w-0">
-              <h2 class="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-                <div class="p-2 bg-sky-100 text-sky-700 rounded-xl">
+              <h2
+                class="text-2xl font-black tracking-tight flex items-center gap-3"
+                :class="isProcurementSurface ? 'text-slate-950' : 'text-slate-900'"
+              >
+                <div
+                  class="p-2"
+                  :class="isProcurementSurface ? 'h-10 w-3 shrink-0 rounded-full bg-teal-900 p-0 text-transparent [&>svg]:hidden' : 'bg-sky-100 text-sky-700 rounded-xl'"
+                >
                   <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
                 </div>
-                รายการงานทั้งหมด
+                {{ isProcurementSurface ? 'รายละเอียดรายการจัดซื้อจัดจ้าง' : 'รายการงานทั้งหมด' }}
               </h2>
-              <p class="text-sm font-semibold text-slate-500 mt-1">แสดงผลล่าสุด 25 รายการ จากฐานข้อมูลหลัก</p>
+              <p
+                class="mt-1 text-sm font-black"
+                :class="isProcurementSurface ? 'text-slate-600' : 'text-slate-500'"
+              >
+                {{ isProcurementSurface ? `SUMMARY TOTAL: ${procurementStatusSummaryTotal.toLocaleString('th-TH')}` : 'แสดงผลล่าสุด 25 รายการ จากฐานข้อมูลหลัก' }}
+              </p>
+              <p v-if="isProcurementSurface" class="mt-1 text-xs font-black text-teal-800">
+                ตัวกรองหน้านี้: {{ procurementFilterSummary }}
+              </p>
+              <p v-if="false" class="mt-1 text-xs font-black text-teal-800">
+                ตัวกรองหน้านี้: ทุกปี · รวมทุกเดือน
+              </p>
+              <p v-if="isProcurementSurface && selectedProcurementStatus" class="mt-1 text-xs font-black text-emerald-700">
+                กำลังดูรายละเอียด: {{ selectedProcurementStatus }}
+              </p>
             </div>
             
             <div class="relative group lg:w-96">
@@ -1067,40 +1330,110 @@ async function applyFilters() {
               </div>
               <input 
                 v-model="searchTerm" 
-                class="input input-bordered w-full h-12 pl-11 pr-4 rounded-xl font-bold bg-slate-50 border-slate-200 focus:bg-white focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 transition-all placeholder:text-slate-400" 
-                placeholder="ค้นหา ECM, W/O หรือรายละเอียด..." 
+                class="input input-bordered w-full h-12 pl-11 pr-4 rounded-xl font-bold transition-all placeholder:text-slate-400"
+                :class="isProcurementSurface ? 'bg-white/70 border-emerald-200 text-slate-800 focus:bg-white focus:border-emerald-400 focus:ring-4 focus:ring-emerald-400/15' : 'bg-slate-50 border-slate-200 focus:bg-white focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10'"
+                :placeholder="isProcurementSurface ? 'SEARCH ECM, W/O, ITEMS...' : 'ค้นหา ECM, W/O หรือรายละเอียด...'"
               />
             </div>
           </div>
 
-          <div class="relative overflow-x-auto rounded-xl border border-slate-100 shadow-sm">
-            <table class="table table-md table-pin-rows min-w-[1000px] border-collapse">
+          <div v-if="false" class="mb-5 rounded-lg border border-emerald-200 bg-white/75 p-3">
+            <div class="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+              <div class="grid gap-3 sm:grid-cols-2 xl:flex-1">
+                <label v-if="false" class="block">
+                  <span class="mb-1 block text-[11px] font-black text-slate-700">ปี</span>
+                  <select v-model="selectedYear" class="select select-bordered h-10 min-h-10 w-full rounded-lg border-emerald-200 bg-white text-sm font-bold text-slate-800 focus:border-emerald-500 focus:outline-none">
+                    <option value="all">ทุกปี</option>
+                    <option v-for="year in years" :key="year" :value="year">{{ year }}</option>
+                  </select>
+                </label>
+                <label v-if="false" class="block">
+                  <span class="mb-1 block text-[11px] font-black text-slate-700">เดือน</span>
+                  <select v-model="selectedMonth" class="select select-bordered h-10 min-h-10 w-full rounded-lg border-emerald-200 bg-white text-sm font-bold text-slate-800 focus:border-emerald-500 focus:outline-none">
+                    <option value="all">รวมทุกเดือน</option>
+                    <option v-for="month in months" :key="month.value" :value="month.value">{{ month.label }}</option>
+                  </select>
+                </label>
+                <label class="block">
+                  <span class="mb-1 block text-[11px] font-black text-slate-700">สถานะ</span>
+                  <select v-model="selectedProcurementStatus" class="select select-bordered h-10 min-h-10 w-full rounded-lg border-emerald-200 bg-white text-sm font-bold text-slate-800 focus:border-emerald-500 focus:outline-none">
+                    <option value="">ทุกสถานะ</option>
+                    <option v-for="status in procurementStatusOptions" :key="status" :value="status">{{ status }}</option>
+                  </select>
+                </label>
+                <label class="block">
+                  <span class="mb-1 block text-[11px] font-black text-slate-700">ค้นหา</span>
+                  <input
+                    v-model="searchTerm"
+                    class="input input-bordered h-10 min-h-10 w-full rounded-lg border-emerald-200 bg-white text-sm font-bold text-slate-800 placeholder:text-slate-500 focus:border-emerald-500 focus:outline-none"
+                    placeholder="ECM, W/O, รายการ..."
+                  />
+                </label>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <button
+                  v-if="false"
+                  type="button"
+                  class="btn h-10 min-h-10 rounded-lg border-emerald-700 bg-emerald-700 px-4 text-sm font-black text-white hover:border-emerald-800 hover:bg-emerald-800"
+                  :disabled="isApplyingFilters"
+                  @click="applyFilters"
+                >
+                  {{ isApplyingFilters ? 'กำลังกรอง...' : 'ใช้ตัวกรอง' }}
+                </button>
+                <button
+                  type="button"
+                  class="btn h-10 min-h-10 rounded-lg border-emerald-200 bg-white px-4 text-sm font-black text-emerald-800 hover:border-emerald-300 hover:bg-emerald-50"
+                  :disabled="!hasProcurementFilters && activeTab !== 'report'"
+                  @click="searchTerm = ''; selectedProcurementStatus = ''"
+                >
+                  ล้างตัวกรอง
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div
+            class="relative overflow-x-auto"
+            :class="isProcurementSurface ? 'rounded-none border-y border-emerald-200' : 'rounded-xl border border-slate-100 shadow-sm'"
+          >
+            <table
+              class="table table-md table-pin-rows border-collapse"
+              :class="isProcurementSurface ? 'min-w-[1460px] procurement-detail-table procurement-status-table' : 'min-w-[1000px]'"
+            >
               <thead>
-                <tr class="bg-slate-50/80 backdrop-blur-sm">
-                  <th class="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-slate-500 border-none">ECM ซื้อจ้าง</th>
-                  <th class="py-4 px-2 text-[10px] font-black uppercase tracking-widest text-slate-500 border-none">ECM</th>
-                  <th class="py-4 px-2 text-[10px] font-black uppercase tracking-widest text-slate-500 border-none">W/O</th>
-                  <th class="py-4 px-2 text-[10px] font-black uppercase tracking-widest text-slate-500 border-none">รายการ</th>
-                  <th class="py-4 px-2 text-[10px] font-black uppercase tracking-widest text-slate-500 border-none">Equip</th>
-                  <th class="py-4 px-2 text-[10px] font-black uppercase tracking-widest text-slate-500 border-none">Date เข้า</th>
-                  <th class="py-4 px-2 text-[10px] font-black uppercase tracking-widest text-slate-500 border-none">Date เริ่มงาน</th>
-                  <th class="py-4 px-2 text-[10px] font-black uppercase tracking-widest text-slate-500 border-none">Date ออกงาน</th>
-                  <th class="py-4 px-2 text-[10px] font-black uppercase tracking-widest text-slate-500 border-none">สถานะ</th>
-                  <th class="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-slate-500 border-none">การดำเนินการ</th>
+                <tr :class="isProcurementSurface ? 'bg-emerald-50 text-slate-950' : 'bg-slate-50/80 backdrop-blur-sm'">
+                  <th class="py-4 px-4 text-[10px] font-black tracking-tight border-none" :class="isProcurementSurface ? 'text-slate-950' : 'uppercase tracking-widest text-slate-500'">ECM ซื้อจ้าง</th>
+                  <th class="py-4 px-2 text-[10px] font-black tracking-tight border-none" :class="isProcurementSurface ? 'text-slate-950' : 'uppercase tracking-widest text-slate-500'">ECM</th>
+                  <th class="py-4 px-2 text-[10px] font-black tracking-tight border-none" :class="isProcurementSurface ? 'text-slate-950' : 'uppercase tracking-widest text-slate-500'">W/O</th>
+                  <th class="py-4 px-2 text-[10px] font-black tracking-tight border-none" :class="isProcurementSurface ? 'text-slate-950' : 'uppercase tracking-widest text-slate-500'">รายการ</th>
+                  <th class="py-4 px-2 text-[10px] font-black tracking-tight border-none" :class="isProcurementSurface ? 'text-slate-950' : 'uppercase tracking-widest text-slate-500'">EQUIP</th>
+                  <th class="py-4 px-2 text-[10px] font-black tracking-tight border-none" :class="isProcurementSurface ? 'text-slate-950' : 'uppercase tracking-widest text-slate-500'">DATE เข้า</th>
+                  <th class="py-4 px-2 text-[10px] font-black tracking-tight border-none" :class="isProcurementSurface ? 'text-slate-950' : 'uppercase tracking-widest text-slate-500'">DATE เริ่มงาน</th>
+                  <th class="py-4 px-2 text-[10px] font-black tracking-tight border-none" :class="isProcurementSurface ? 'text-slate-950' : 'uppercase tracking-widest text-slate-500'">DATE ออกงาน</th>
+                  <th class="py-4 px-2 text-[10px] font-black tracking-tight border-none" :class="isProcurementSurface ? 'text-slate-950' : 'uppercase tracking-widest text-slate-500'">สถานะ</th>
+                  <th class="py-4 px-4 text-[10px] font-black tracking-tight border-none" :class="isProcurementSurface ? 'text-slate-950' : 'uppercase tracking-widest text-slate-500'">การดำเนินการ</th>
                 </tr>
               </thead>
-              <tbody class="divide-y divide-slate-50">
-                <tr v-for="project in filteredProjects" :key="project.id" class="hover:bg-sky-50/50 transition-colors group">
-                  <td class="px-4 py-4 font-black text-sky-700 text-[12px]">{{ project.ecmProcurement }}</td>
-                  <td class="px-2 py-4 font-black text-sky-700 text-[12px]">{{ project.ecm }}</td>
+              <tbody :class="isProcurementSurface ? '' : 'divide-y divide-slate-50'">
+                <tr
+                  v-for="project in (isProcurementSurface ? procurementTableProjects : filteredProjects)"
+                  :key="project.id"
+                  class="transition-colors group"
+                  :class="isProcurementSurface ? 'bg-emerald-50/70 hover:bg-emerald-100/65' : 'hover:bg-sky-50/50'"
+                >
+                  <td class="px-4 py-4 font-black text-[12px]" :class="isProcurementSurface ? 'text-slate-700' : 'text-sky-700'">{{ isProcurementSurface ? project.detailItem : project.ecmProcurement }}</td>
+                  <td class="px-2 py-4 font-black text-[12px]" :class="isProcurementSurface ? 'text-slate-700' : 'text-sky-700'">{{ project.ecm }}</td>
                   <td class="px-2 py-4 font-bold text-slate-900 tracking-tight text-[12px]">{{ project.order }}</td>
-                  <td class="px-2 py-4 text-[12px] font-bold text-slate-800">{{ project.name }}</td>
-                  <td class="px-2 py-4 text-[12px] font-bold text-slate-600">{{ project.equipGroup }}</td>
+                  <td class="px-2 py-4 text-[12px] font-bold text-slate-800" :class="isProcurementSurface ? 'leading-7' : ''">{{ project.name }}</td>
+                  <td class="px-2 py-4 text-[12px] font-bold text-slate-600" :class="isProcurementSurface ? 'leading-6' : ''">{{ project.equipGroup }}</td>
                   <td class="px-2 py-4 text-[12px] font-bold text-slate-600 text-center">{{ project.date }}</td>
                   <td class="px-2 py-4 text-[12px] font-bold text-slate-600 text-center">{{ project.startDate }}</td>
                   <td class="px-2 py-4 text-[12px] font-bold text-slate-600 text-center">{{ project.endDate }}</td>
                   <td class="px-2 py-4 text-center">
-                    <span class="inline-flex items-center justify-center px-2 py-1 rounded-full text-[10px] font-black tracking-tight leading-none" :class="statusBadge(project.status)">
+                    <span
+                      class="inline-flex items-center justify-center px-2 py-1 text-[10px] font-black tracking-tight leading-none"
+                      :class="isProcurementSurface ? `rounded-md ${procurementStatusBadge(project.status)}` : `rounded-full ${statusBadge(project.status)}`"
+                    >
                       {{ project.status }}
                     </span>
                   </td>
@@ -1768,3 +2101,71 @@ async function applyFilters() {
     </main>
   </div>
 </template>
+
+<style scoped>
+.procurement-detail-table {
+  border-color: #99f6d4;
+  color: #263e56;
+  table-layout: fixed;
+}
+
+.procurement-detail-table :is(th, td) {
+  border: 1px solid #99f6d4 !important;
+  vertical-align: middle;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.procurement-detail-table thead th {
+  background: #ecfdf5 !important;
+  height: 42px;
+  color: #020617;
+  padding: 8px 8px;
+  text-align: center;
+}
+
+.procurement-detail-table tbody td {
+  background: #ecfdf5;
+  padding: 10px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.procurement-detail-table tbody tr:hover td {
+  background: #dcfce7;
+}
+
+.procurement-sheet-table tbody td {
+  height: 54px;
+}
+
+.procurement-sheet-table .procurement-text-cell {
+  text-align: left;
+}
+
+.procurement-sheet-table .procurement-head-yellow {
+  background: #ffe45c !important;
+}
+
+.procurement-sheet-table .procurement-head-cream {
+  background: #fff1a8 !important;
+}
+
+.procurement-sheet-table .procurement-head-orange {
+  background: #f6b26b !important;
+}
+
+.procurement-sheet-table .procurement-head-cyan {
+  background: #00e5ff !important;
+}
+
+.procurement-sheet-table .procurement-head-blue {
+  background: #00a2ff !important;
+}
+
+.procurement-sheet-table .procurement-head-purple {
+  background: #b000ff !important;
+  color: #fff;
+}
+</style>

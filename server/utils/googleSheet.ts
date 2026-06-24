@@ -28,6 +28,7 @@ function getSheetsClient() {
 const OT_CONTRACTOR_SPREADSHEET_ID = process.env.GOOGLE_OT_CONTRACTOR_SHEET_ID || process.env.GOOGLE_OT_SHEET_ID || '1ucCTBZBLF8tkTWyuIE46_aRx0vUwen382wWokuR55UQ';
 const OT_EMPLOYEE_SPREADSHEET_ID = process.env.GOOGLE_OT_EMPLOYEE_SHEET_ID || '1__JtmwYd3xmL6XL-VkEU1E53NyaySwcT7dQY3OQ4aCA';
 const OT_CONTRACTOR_SHEET_ID = Number(process.env.GOOGLE_OT_CONTRACTOR_SHEET_ID_NUM || process.env.GOOGLE_OT_SHEET_ID_NUM || 2120946153);
+const PROCUREMENT_DETAIL_SHEET_TITLE = process.env.GOOGLE_PROCUREMENT_DETAIL_SHEET_TITLE || 'W11';
 
 async function getSheetTitleById(client: ReturnType<typeof getSheetsClient>, spreadsheetId: string, sheetId: number) {
   const metadata = await client.sheets.spreadsheets.get({
@@ -84,15 +85,19 @@ export async function getRawDashboardSheets(filters: { year?: string; month?: st
     OT_EMPLOYEE_SPREADSHEET_ID ? getSummarySheetTitle(client, OT_EMPLOYEE_SPREADSHEET_ID, filters) : Promise.resolve(''),
   ]);
 
-  const [dashboardRes, infoRes, otSummaryRes, otEmployeeSummaryRes, otCheckErrorRes, otEmployeeCheckErrorRes] = await Promise.all([
+  const [dashboardRes, infoRes, procurementDetailRes, otSummaryRes, otEmployeeSummaryRes, otCheckErrorRes, otEmployeeCheckErrorRes] = await Promise.all([
     client.sheets.spreadsheets.values.get({
       spreadsheetId: client.sheetId,
-      range: "'Dashboard W10 All'!A1:CZ1000",
+      range: "'Dashboard W10 All'!A:CZ",
     }),
     client.sheets.spreadsheets.values.get({
       spreadsheetId: client.sheetId,
       range: "'Dashboard W10 All info'!A1:CZ5000",
     }),
+    client.sheets.spreadsheets.values.get({
+      spreadsheetId: client.sheetId,
+      range: `${quoteSheetName(PROCUREMENT_DETAIL_SHEET_TITLE)}!A10:R5000`,
+    }).catch(() => ({ data: { values: [] } })),
     client.sheets.spreadsheets.values.get({
       spreadsheetId: OT_CONTRACTOR_SPREADSHEET_ID,
       range: `${quoteSheetName(otContractorSummaryTitle)}!A1:AP1000`,
@@ -114,6 +119,7 @@ export async function getRawDashboardSheets(filters: { year?: string; month?: st
   return {
     dashboard: dashboardRes.data.values || [],
     info: infoRes.data.values || [],
+    procurementDetail: procurementDetailRes.data.values || [],
     otSummary: otSummaryRes.data.values || [],
     otEmployeeSummary: otEmployeeSummaryRes.data.values || [],
     otCheckError: otCheckErrorRes.data.values || [],
